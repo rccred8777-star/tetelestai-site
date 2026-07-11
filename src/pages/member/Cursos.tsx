@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   BookOpen, FileText, ChevronLeft, ExternalLink, Loader2, CheckCircle,
-  PlayCircle, GraduationCap,
+  PlayCircle, GraduationCap, Lock, Clock, UserPlus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -11,7 +11,10 @@ import { Progress } from '@/components/ui/progress'
 import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
 import { listCourses, listLessons, type Course, type Lesson } from '@/services/coursesDb'
-import { listStudentCourseIds } from '@/services/enrollmentsDb'
+import {
+  listStudentEnrollments, requestEnrollment, cancelRequest,
+  type EnrollmentStatus,
+} from '@/services/enrollmentsDb'
 import { getUserProgress, markLessonComplete } from '@/services/firestore'
 
 // Renderizador simples de Markdown (títulos, negrito, listas) — sem libs extras.
@@ -39,30 +42,30 @@ export default function Cursos() {
   const [loading, setLoading] = useState(true)
   const [completed, setCompleted] = useState<string[]>([])
 
+  // Situação do aluno em cada curso: courseId -> 'pendente' | 'aprovado'
+  const [status, setStatus] = useState<Record<string, EnrollmentStatus>>({})
+  const [busyId, setBusyId] = useState<string | null>(null)
+
   const [course, setCourse] = useState<Course | null>(null)
   const [lessons, setLessons] = useState<Lesson[]>([])
   const [lesson, setLesson] = useState<Lesson | null>(null)
   const [loadingLessons, setLoadingLessons] = useState(false)
 
+  const loadEnrollments = async (uid: string) => {
+    const mine = await listStudentEnrollments(uid)
+    const map: Record<string, EnrollmentStatus> = {}
+    mine.forEach((e) => { map[e.courseId] = e.status })
+    setStatus(map)
+  }
+
   useEffect(() => {
     (async () => {
       try {
-        const all = await listCourses()
-
+        setCourses(await listCourses())
         if (user) {
-          // Admin enxerga todos os cursos. O membro ve apenas
-          // aqueles em que foi matriculado.
-          if (isAdmin) {
-            setCourses(all)
-          } else {
-            const myIds = await listStudentCourseIds(user.uid)
-            setCourses(all.filter((c) => myIds.includes(c.id)))
-          }
-
+          await loadEnrollments(user.uid)
           const p = await getUserProgress(user.uid)
           setCompleted(p.completedLessons || [])
-        } else {
-          setCourses([])
         }
       } catch (e) {
         console.error(e)
@@ -70,9 +73,46 @@ export default function Cursos() {
         setLoading(false)
       }
     })()
-  }, [user, isAdmin])
+  }, [user])
+
+  // O admin acessa qualquer curso. O membro, só os aprovados.
+  const canAccess = (c: Course) => isAdmin || status[c.id] === 'aprovado'
+
+  const meusCursos = courses.filter(canAccess)
+  const disponiveis = isAdmin ? [] : courses.filter((c) => status[c.id] !== 'aprovado')
+
+  const inscrever = async (c: Course) => {
+    if (!user) return
+    setBusyId(c.id)
+    try {
+      await requestEnrollment(c.id, user.uid)
+      await loadEnrollments(user.uid)
+      toast.success('Pedido enviado! A liderança vai avaliar sua inscrição.')
+    } catch (e) {
+      toast.error('Não foi possível enviar o pedido.')
+      console.error(e)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const cancelar = async (c: Course) => {
+    if (!user) return
+    setBusyId(c.id)
+    try {
+      await cancelRequest(c.id, user.uid)
+      await loadEnrollments(user.uid)
+      toast.info('Pedido cancelado.')
+    } catch (e) {
+      toast.error('Não foi possível cancelar.')
+      console.error(e)
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   const openCourse = async (c: Course) => {
+    if (!canAccess(c)) return
     setCourse(c); setLesson(null); setLoadingLessons(true)
     try { setLessons(await listLessons(c.id)) } finally { setLoadingLessons(false) }
   }
@@ -235,34 +275,96 @@ export default function Cursos() {
 
       {loading ? (
         <div className="flex items-center justify-center py-16 text-[#718096]"><Loader2 className="mr-2 h-6 w-6 animate-spin" /> Carregando cursos...</div>
-      ) : courses.length === 0 ? (
-        <Card className="border-0 shadow-sm">
-          <CardContent className="py-14 text-center">
-            <BookOpen className="mx-auto mb-3 h-10 w-10 text-gray-300" />
-            <p className="text-sm text-[#4A5568]">Você ainda não está matriculado em nenhum curso.</p>
-            <p className="mt-1 text-xs text-[#718096]">
-              Fale com a liderança da igreja para ser incluído em uma turma.
-            </p>
-          </CardContent>
-        </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {courses.map((c) => (
-            <button key={c.id} onClick={() => openCourse(c)} className="group overflow-hidden rounded-xl border-0 bg-white text-left shadow-sm transition-shadow hover:shadow-md">
-              <div className="flex h-28 items-center justify-center" style={{ background: `linear-gradient(135deg, ${c.coverColor || '#1A365D'}, #2C5282)` }}>
-                <GraduationCap className="h-12 w-12 text-white/25" />
+        <>
+          {/* ---------------- Meus cursos (acesso liberado) ---------------- */}
+          <section className="space-y-3">
+            <h2 className="font-heading text-lg font-bold text-[#1A202C]">
+              {isAdmin ? 'Todos os cursos' : 'Meus cursos'}
+            </h2>
+
+            {meusCursos.length === 0 ? (
+              <Card className="border-0 shadow-sm">
+                <CardContent className="py-10 text-center">
+                  <BookOpen className="mx-auto mb-3 h-9 w-9 text-gray-300" />
+                  <p className="text-sm text-[#4A5568]">Você ainda não tem acesso a nenhum curso.</p>
+                  <p className="mt-1 text-xs text-[#718096]">
+                    Escolha um curso abaixo e clique em "Quero me inscrever".
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {meusCursos.map((c) => (
+                  <button key={c.id} onClick={() => openCourse(c)} className="group overflow-hidden rounded-xl border-0 bg-white text-left shadow-sm transition-shadow hover:shadow-md">
+                    <div className="flex h-28 items-center justify-center" style={{ background: `linear-gradient(135deg, ${c.coverColor || '#1A365D'}, #2C5282)` }}>
+                      <GraduationCap className="h-12 w-12 text-white/25" />
+                    </div>
+                    <div className="p-4">
+                      <p className="font-heading font-bold text-[#1A202C]">{c.title}</p>
+                      <p className="mt-0.5 line-clamp-2 text-xs text-[#718096]">{c.description}</p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        {c.category && <Badge variant="outline" className="text-[10px]">{c.category}</Badge>}
+                        <Badge variant="outline" className="text-[10px]"><BookOpen className="mr-1 h-3 w-3" />{c.lessonCount ?? 0} aulas</Badge>
+                      </div>
+                    </div>
+                  </button>
+                ))}
               </div>
-              <div className="p-4">
-                <p className="font-heading font-bold text-[#1A202C]">{c.title}</p>
-                <p className="mt-0.5 line-clamp-2 text-xs text-[#718096]">{c.description}</p>
-                <div className="mt-3 flex items-center gap-2">
-                  {c.category && <Badge variant="outline" className="text-[10px]">{c.category}</Badge>}
-                  <Badge variant="outline" className="text-[10px]"><BookOpen className="mr-1 h-3 w-3" />{c.lessonCount ?? 0} aulas</Badge>
-                </div>
+            )}
+          </section>
+
+          {/* ---------------- Catálogo: cursos disponíveis ---------------- */}
+          {disponiveis.length > 0 && (
+            <section className="space-y-3 pt-2">
+              <div>
+                <h2 className="font-heading text-lg font-bold text-[#1A202C]">Cursos disponíveis</h2>
+                <p className="text-xs text-[#718096]">
+                  Peça sua inscrição. A liderança avalia e libera o acesso ao conteúdo.
+                </p>
               </div>
-            </button>
-          ))}
-        </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {disponiveis.map((c) => {
+                  const pendente = status[c.id] === 'pendente'
+                  const busy = busyId === c.id
+                  return (
+                    <div key={c.id} className="overflow-hidden rounded-xl border-0 bg-white shadow-sm">
+                      <div className="flex h-28 items-center justify-center opacity-60" style={{ background: `linear-gradient(135deg, ${c.coverColor || '#1A365D'}, #2C5282)` }}>
+                        <Lock className="h-10 w-10 text-white/40" />
+                      </div>
+                      <div className="p-4">
+                        <p className="font-heading font-bold text-[#1A202C]">{c.title}</p>
+                        <p className="mt-0.5 line-clamp-3 text-xs text-[#718096]">{c.description}</p>
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          {c.category && <Badge variant="outline" className="text-[10px]">{c.category}</Badge>}
+                          <Badge variant="outline" className="text-[10px]"><BookOpen className="mr-1 h-3 w-3" />{c.lessonCount ?? 0} aulas</Badge>
+                        </div>
+
+                        {pendente ? (
+                          <div className="mt-4 space-y-2">
+                            <div className="flex items-center gap-2 rounded-lg bg-[#FFFBEB] px-3 py-2 text-xs text-[#92400E]">
+                              <Clock className="h-3.5 w-3.5 shrink-0" />
+                              Pedido enviado. Aguardando aprovação da liderança.
+                            </div>
+                            <Button variant="ghost" size="sm" disabled={busy} onClick={() => cancelar(c)} className="h-8 w-full text-xs text-[#718096]">
+                              {busy && <Loader2 className="mr-1 h-3 w-3 animate-spin" />} Cancelar pedido
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button size="sm" disabled={busy} onClick={() => inscrever(c)} className="mt-4 w-full gap-1 bg-[#1A365D] hover:bg-[#1A365D]/90">
+                            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+                            Quero me inscrever
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          )}
+        </>
       )}
     </div>
   )

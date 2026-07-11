@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import {
   GraduationCap, Plus, Pencil, Trash2, BookOpen, FileText, ChevronLeft,
   ArrowUp, ArrowDown, DownloadCloud, Loader2, ExternalLink, Link as LinkIcon,
-  Users, Search,
+  Users, Search, Clock, Check,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -22,7 +22,9 @@ import {
   type Course, type Lesson, type Material,
 } from '@/services/coursesDb'
 import { listStudents, type Student } from '@/services/studentsDb'
-import { listCourseStudentIds, saveCourseRoster } from '@/services/enrollmentsDb'
+import {
+  listCourseEnrollments, saveCourseRoster, approveEnrollment, unenrollStudent,
+} from '@/services/enrollmentsDb'
 
 // -------------------- Editor de Apostilas (materiais/links) -----------------
 function MaterialsEditor({ value, onChange }: { value: Material[]; onChange: (m: Material[]) => void }) {
@@ -293,23 +295,61 @@ function RosterDialog({ open, onOpenChange, course }: {
   const [students, setStudents] = useState<Student[]>([])
   const [selected, setSelected] = useState<string[]>([])
   const [initial, setInitial] = useState<string[]>([])
+  const [pending, setPending] = useState<string[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  const load = async (courseId: string) => {
+    const [all, enrollments] = await Promise.all([
+      listStudents(),
+      listCourseEnrollments(courseId),
+    ])
+    const aprovados = enrollments.filter((e) => e.status === 'aprovado').map((e) => e.userId)
+    const pendentes = enrollments.filter((e) => e.status === 'pendente').map((e) => e.userId)
+    setStudents(all)
+    setSelected(aprovados)
+    setInitial(aprovados)
+    setPending(pendentes)
+  }
 
   useEffect(() => {
     if (!open || !course) return
     setLoading(true)
     setSearch('')
-    Promise.all([listStudents(), listCourseStudentIds(course.id)])
-      .then(([all, enrolled]) => {
-        setStudents(all)
-        setSelected(enrolled)
-        setInitial(enrolled)
-      })
+    load(course.id)
       .catch((e) => { toast.error('Erro ao carregar a turma'); console.error(e) })
       .finally(() => setLoading(false))
   }, [open, course])
+
+  const nomeDe = (id: string) => {
+    const s = students.find((x) => x.id === id)
+    return s?.displayName || s?.email || 'Membro'
+  }
+
+  const aprovar = async (userId: string) => {
+    if (!course) return
+    setBusyId(userId)
+    try {
+      await approveEnrollment(course.id, userId)
+      await load(course.id)
+      toast.success(`${nomeDe(userId)} aprovado(a) no curso`)
+    } catch (e) { toast.error('Erro ao aprovar'); console.error(e) }
+    finally { setBusyId(null) }
+  }
+
+  const recusar = async (userId: string) => {
+    if (!course) return
+    if (!confirm(`Recusar o pedido de ${nomeDe(userId)}?`)) return
+    setBusyId(userId)
+    try {
+      await unenrollStudent(course.id, userId)
+      await load(course.id)
+      toast.info('Pedido recusado')
+    } catch (e) { toast.error('Erro ao recusar'); console.error(e) }
+    finally { setBusyId(null) }
+  }
 
   const toggle = (id: string) => {
     setSelected((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
@@ -342,11 +382,41 @@ function RosterDialog({ open, onOpenChange, course }: {
         <DialogHeader>
           <DialogTitle>Turma — {course?.title}</DialogTitle>
           <DialogDescription>
-            Marque quem pode acessar este curso. Quem não estiver marcado não vê o curso.
+            Aprove os pedidos e marque quem pode acessar este curso.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 py-2">
+          {/* ---------- Pedidos aguardando aprovação ---------- */}
+          {pending.length > 0 && (
+            <div className="rounded-lg border border-[#FDE68A] bg-[#FFFBEB] p-3">
+              <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-[#92400E]">
+                <Clock className="h-3.5 w-3.5" />
+                {pending.length} pedido(s) aguardando aprovação
+              </p>
+              <div className="space-y-1.5">
+                {pending.map((uid) => {
+                  const s = students.find((x) => x.id === uid)
+                  const busy = busyId === uid
+                  return (
+                    <div key={uid} className="flex items-center gap-2 rounded-md bg-white px-2.5 py-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-[#1A202C]">{s?.displayName || '(sem nome)'}</p>
+                        <p className="truncate text-[11px] text-[#718096]">{s?.email}</p>
+                      </div>
+                      <Button size="sm" disabled={busy} onClick={() => aprovar(uid)} className="h-7 gap-1 bg-[#38A169] px-2 text-xs hover:bg-[#38A169]/90">
+                        {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />} Aprovar
+                      </Button>
+                      <Button size="sm" variant="ghost" disabled={busy} onClick={() => recusar(uid)} className="h-7 px-2 text-xs text-red-500">
+                        Recusar
+                      </Button>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#718096]" />
             <Input
