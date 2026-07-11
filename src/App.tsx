@@ -35,6 +35,7 @@ import AdminCursos from '@/pages/member/AdminCursos'
 import AdminAlunos from '@/pages/member/AdminAlunos'
 import AdminComunicados from '@/pages/member/AdminComunicados'
 import AdminEventos from '@/pages/member/AdminEventos'
+import AdminCelulas from '@/pages/member/AdminCelulas'
 
 /**
  * ProtectedRoute - redirects to login if not authenticated
@@ -125,6 +126,7 @@ export default function App() {
       <Route path="/admin/alunos" element={<AdminRoute><AdminAlunos /></AdminRoute>} />
       <Route path="/admin/comunicados" element={<AdminRoute><AdminComunicados /></AdminRoute>} />
       <Route path="/admin/eventos" element={<AdminRoute><AdminEventos /></AdminRoute>} />
+      <Route path="/admin/celulas" element={<AdminRoute><AdminCelulas /></AdminRoute>} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
