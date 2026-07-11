@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import {
   LayoutDashboard, User, Users, BookOpen, Calendar, Bell,
   Heart, LogOut, Menu, X, ChevronLeft, ChevronRight,
-  PlayCircle, Shield, TrendingUp, Church, GraduationCap, Megaphone
+  PlayCircle, Shield, TrendingUp, Church, GraduationCap, Megaphone, Network
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
@@ -30,6 +30,11 @@ const leaderNav = [
   { label: 'Area do Lider', href: '/area-lider', icon: Church },
 ]
 
+// Navigation items for network supervisors (visible to supervisor and admin)
+const supervisorNav = [
+  { label: 'Minha Rede', href: '/supervisao', icon: Network },
+]
+
 // Navigation items for admins (visible only to admin)
 const adminNav = [
   { label: 'Painel Admin', href: '/admin', icon: Shield },
@@ -49,7 +54,7 @@ export default function MemberLayout({ children }: MemberLayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, profile, logout, isLeader, isAdmin } = useAuth()
+  const { user, profile, logout, isLeader, isSupervisor, isAdmin } = useAuth()
   
   // Get display info from profile or user
   const displayName = profile?.displayName || user?.displayName || 'Usuario'
@@ -136,6 +141,8 @@ export default function MemberLayout({ children }: MemberLayoutProps) {
             )}
             {collapsed && <div className="mx-auto w-6 h-px bg-white/20 my-3" />}
             {renderNav(leaderNav)}
+            {/* Supervisor de rede - visível a supervisores e admins */}
+            {isSupervisor && renderNav(supervisorNav)}
           </>
         )}
 
