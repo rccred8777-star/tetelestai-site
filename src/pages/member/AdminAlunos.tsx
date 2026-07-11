@@ -12,9 +12,15 @@ import { useAuth } from '@/hooks/useAuth'
 import type { UserRole } from '@/contexts/AuthContext'
 import { listStudents, updateStudentRole, completedCount, type Student } from '@/services/studentsDb'
 
-const roleLabel: Record<UserRole, string> = { admin: 'Administrador', leader: 'Líder', member: 'Membro' }
+const roleLabel: Record<UserRole, string> = {
+  admin: 'Administrador',
+  supervisor: 'Supervisor de Rede',
+  leader: 'Líder',
+  member: 'Membro',
+}
 const roleColor: Record<UserRole, string> = {
   admin: 'bg-[#1A365D] text-white',
+  supervisor: 'bg-[#0E7490] text-white',
   leader: 'bg-[#7C2D12] text-white',
   member: 'bg-gray-100 text-[#4A5568]',
 }
@@ -58,6 +64,7 @@ export default function AdminAlunos() {
   const counts = useMemo(() => ({
     total: students.length,
     admin: students.filter((s) => s.role === 'admin').length,
+    supervisor: students.filter((s) => s.role === 'supervisor').length,
     leader: students.filter((s) => s.role === 'leader').length,
     member: students.filter((s) => s.role === 'member').length,
   }), [students])
@@ -122,6 +129,7 @@ export default function AdminAlunos() {
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="admin">Administradores</SelectItem>
+                <SelectItem value="supervisor">Supervisores</SelectItem>
                 <SelectItem value="leader">Líderes</SelectItem>
                 <SelectItem value="member">Membros</SelectItem>
               </SelectContent>
@@ -163,6 +171,7 @@ export default function AdminAlunos() {
                           <SelectContent>
                             <SelectItem value="member">Membro</SelectItem>
                             <SelectItem value="leader">Líder</SelectItem>
+                            <SelectItem value="supervisor">Supervisor de Rede</SelectItem>
                             <SelectItem value="admin">Administrador</SelectItem>
                           </SelectContent>
                         </Select>

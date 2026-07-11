@@ -1,955 +1,592 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
-  Users, BookOpen, TrendingUp, Calendar,
-  BarChart3, MessageSquare, ChevronRight,
-  CheckCircle, Clock, AlertCircle,
-  Heart, Target, ArrowUpRight, ArrowDownRight,
-  Phone, MapPin, UserCheck, FileText,
-  Send, Star, Activity,
-  Play, Globe
+  Church, Users, Loader2, MapPin, Clock, Plus, Check, Trash2,
+  UserPlus, Search, Wallet, Lock, AlertTriangle, TrendingUp, HandHeart,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { cellGroups, cellMembers } from '@/data/mock'
+import { useAuth } from '@/hooks/useAuth'
+import {
+  getCellILead, listCellMemberships, listMeetings, saveMeeting,
+  addMember, approveMember, removeMember, setTimoteo, setSecretario,
+  launchOffering, confirmOffering, computeStats, brl,
+  type Cell, type Meeting, type Membership,
+} from '@/services/cellsDb'
+import { listStudents, type Student } from '@/services/studentsDb'
 
-/* ------------------------------------------------------------------ */
-/*  MOCK DATA - LIDER                                                  */
-/* ------------------------------------------------------------------ */
-
-// Celulas que o lider lidera (simulando que o usuario atual lidera 2 celulas)
-const minhasCelulas = [
-  { ...cellGroups[0], membrosAtivos: 10, visitantesMes: 3, conversoesAno: 2, proximoEncontro: '2026-01-20', temaProximo: 'O Chamado para Liderar', multiplicacaoPrevista: '2026-06' },
-  { ...cellGroups[1], membrosAtivos: 6, visitantesMes: 2, conversoesAno: 1, proximoEncontro: '2026-01-22', temaProximo: 'Certeza da Salvacao', multiplicacaoPrevista: '2026-08' },
-]
-
-// Membros da celula principal (primeira celula)
-const membrosCelula = cellMembers.slice(0, 10).map((m, i) => ({
-  ...m,
-  status: i < 3 ? 'ativo' : i < 6 ? 'regular' : i < 8 ? 'visitante' : 'ausente',
-  ultimaPresenca: i < 5 ? '15 Jan 2026' : i < 8 ? '08 Jan 2026' : 'Nunca',
-  dataNascimento: `${(i + 1).toString().padStart(2, '0')}/0${(i % 3) + 1}`,
-  necessidadeOracao: i === 2 ? 'Saude' : i === 5 ? 'Emprego' : i === 7 ? 'Familia' : null,
-}))
-
-// Relatorios semanais anteriores
-const relatoriosAnteriores = [
-  { id: 1, semana: '06-12 Jan 2026', encontroRealizado: true, presentes: 9, visitantes: 1, novosConvertidos: 0, oferta: 'R$ 150,00', observacoes: 'Encontro muito bom. Joao trouxe o primo.' },
-  { id: 2, semana: '30-05 Jan 2026', encontroRealizado: true, presentes: 7, visitantes: 2, novosConvertidos: 1, oferta: 'R$ 200,00', observacoes: 'Ana aceitou Jesus! Grande celebracao.' },
-  { id: 3, semana: '23-29 Dez 2025', encontroRealizado: false, presentes: 0, visitantes: 0, novosConvertidos: 0, oferta: '-', observacoes: 'Recesso de final de ano. Encontro nao realizado.' },
-]
-
-// Material de estudo da semana
-const materialSemana = {
-  tema: 'O Chamado para Liderar',
-  licoes: [
-    { titulo: 'Aula 1: O Chamado para Liderar', video: 'https://youtube.com/...', duracao: '30min' },
-    { titulo: 'Aula 2: O Carater do Lider', video: 'https://youtube.com/...', duracao: '35min' },
-  ],
-  perguntasDiscussao: [
-    'Como voce sentiu o chamado para liderar?',
-    'Quais qualidades de Exodo 18:21 voce mais precisa desenvolver?',
-    'Como a lideranca no Reino difere da lideranca secular?',
-  ],
-  versiculoChave: 'Exodo 18:21',
-  textoVersiculo: 'Tu procuras, de todo o povo, homens capazes, tementes a Deus, homens verazes, que odeiem a avareza.',
-}
-
-// Estatisticas mensais
-const estatisticasMensais = [
-  { mes: 'Out', presentes: 6, visitantes: 1 },
-  { mes: 'Nov', presentes: 7, visitantes: 2 },
-  { mes: 'Dez', presentes: 5, visitantes: 1 },
-  { mes: 'Jan', presentes: 8, visitantes: 2 },
-]
-
-/* ------------------------------------------------------------------ */
-/*  HELPER COMPONENTS                                                  */
-/* ------------------------------------------------------------------ */
-
-function StatusBadge({ status }: { status: string }) {
-  const config: Record<string, { label: string; classe: string }> = {
-    ativo: { label: 'Ativo', classe: 'bg-green-100 text-green-700 hover:bg-green-100' },
-    regular: { label: 'Regular', classe: 'bg-blue-100 text-blue-700 hover:bg-blue-100' },
-    visitante: { label: 'Visitante', classe: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-100' },
-    ausente: { label: 'Ausente', classe: 'bg-red-100 text-red-700 hover:bg-red-100' },
-  }
-  const c = config[status] || config.ausente
-  return <Badge className={c.classe}>{c.label}</Badge>
-}
-
-function StatCard({
-  titulo, valor, subtitulo, icone: Icon, cor, tendencia
-}: {
-  titulo: string; valor: string; subtitulo: string; icone: React.ElementType; cor: string; tendencia?: 'up' | 'down' | 'neutral'
-}) {
-  return (
-    <Card className="border-0 shadow-sm hover:shadow-md transition-shadow">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <p className="text-sm text-[#718096] font-medium">{titulo}</p>
-            <p className="text-2xl font-bold text-[#1A202C] mt-1">{valor}</p>
-            <div className="flex items-center gap-1 mt-1">
-              {tendencia === 'up' && <ArrowUpRight className="w-3.5 h-3.5 text-green-500" />}
-              {tendencia === 'down' && <ArrowDownRight className="w-3.5 h-3.5 text-red-500" />}
-              <p className="text-xs text-[#718096]">{subtitulo}</p>
-            </div>
-          </div>
-          <div className={`w-10 h-10 rounded-lg ${cor} flex items-center justify-center`}>
-            <Icon className="w-5 h-5 text-white" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-/* ------------------------------------------------------------------ */
-/*  MAIN COMPONENT                                                     */
-/* ------------------------------------------------------------------ */
+const nomeDe = (s?: Student) => s?.displayName || s?.email || '(sem nome)'
 
 export default function AreaLider() {
-  const navigate = useNavigate()
-  const [abaAtiva, setAbaAtiva] = useState('visao-geral')
-  const [celulaSelecionada, setCelulaSelecionada] = useState(0)
+  const { user, profile } = useAuth()
+  const meuNome = profile?.displayName || user?.displayName || user?.email || 'Líder'
 
-  // Formulario de relatorio
-  const [formRelatorio, setFormRelatorio] = useState({
-    dataEncontro: '',
-    presentes: '',
-    visitantes: '',
-    novosConvertidos: '',
-    oferta: '',
-    louvor: '',
-    palavra: '',
-    perguntas: '',
-    oracao: '',
-    compromissos: '',
-    observacoes: '',
-  })
+  const [cell, setCell] = useState<Cell | null>(null)
+  const [memberships, setMemberships] = useState<Membership[]>([])
+  const [students, setStudents] = useState<Student[]>([])
+  const [meetings, setMeetings] = useState<Meeting[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState<string | null>(null)
 
-  const handleSubmitRelatorio = () => {
-    toast.success('Relatorio enviado com sucesso!', {
-      description: 'Seu pastor sera notificado. Obrigado!'
-    })
-    setFormRelatorio({
-      dataEncontro: '', presentes: '', visitantes: '', novosConvertidos: '',
-      oferta: '', louvor: '', palavra: '', perguntas: '', oracao: '',
-      compromissos: '', observacoes: '',
-    })
+  const [addOpen, setAddOpen] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
+  const [offeringFor, setOfferingFor] = useState<Meeting | null>(null)
+
+  const carregar = async () => {
+    if (!user) return
+    setLoading(true)
+    try {
+      const c = await getCellILead(user.uid)
+      setCell(c)
+      if (c) {
+        const [ms, ss, mt] = await Promise.all([
+          listCellMemberships(c.id), listStudents(), listMeetings(c.id),
+        ])
+        setMemberships(ms)
+        setStudents(ss)
+        setMeetings(mt)
+      }
+    } catch (e) { toast.error('Erro ao carregar a célula'); console.error(e) }
+    finally { setLoading(false) }
   }
 
-  const celulaAtual = minhasCelulas[celulaSelecionada]
+  useEffect(() => { carregar() }, [user])
+
+  // ---- papéis dentro da célula ----
+  const souLider = !!cell && cell.leaderId === user?.uid
+  const souSecretario = !!cell && cell.secretarioId === user?.uid
+
+  const aprovados = memberships.filter((m) => m.status === 'aprovado')
+  const pendentes = memberships.filter((m) => m.status === 'pendente')
+  const membroDe = (uid: string) => students.find((s) => s.id === uid)
+  const stats = computeStats(meetings)
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24 text-[#718096]">
+        <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Carregando sua célula...
+      </div>
+    )
+  }
+
+  if (!cell) {
+    return (
+      <div className="mx-auto max-w-2xl">
+        <Card className="border-0 shadow-sm">
+          <CardContent className="py-16 text-center">
+            <Church className="mx-auto mb-4 h-12 w-12 text-gray-300" />
+            <p className="font-medium text-[#1A202C]">Você ainda não lidera nenhuma célula.</p>
+            <p className="mt-1 text-sm text-[#718096]">
+              A liderança da igreja precisa vincular você a uma célula no Painel Admin.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const incluir = async (uid: string) => {
+    setBusy(uid)
+    try { await addMember(cell.id, uid); await carregar(); toast.success('Membro incluído') }
+    catch (e) { toast.error('Erro ao incluir'); console.error(e) } finally { setBusy(null) }
+  }
+  const aprovar = async (uid: string) => {
+    setBusy(uid)
+    try { await approveMember(cell.id, uid); await carregar(); toast.success('Pedido aprovado') }
+    catch (e) { toast.error('Erro ao aprovar'); console.error(e) } finally { setBusy(null) }
+  }
+  const remover = async (uid: string) => {
+    const s = membroDe(uid)
+    if (!confirm(`Remover ${nomeDe(s)} da célula?`)) return
+    setBusy(uid)
+    try { await removeMember(cell.id, uid); await carregar(); toast.info('Removido') }
+    catch (e) { toast.error('Erro ao remover'); console.error(e) } finally { setBusy(null) }
+  }
+  const nomearTimoteo = async (uid: string) => {
+    const s = membroDe(uid)
+    try { await setTimoteo(cell.id, uid, nomeDe(s)); await carregar(); toast.success(`${nomeDe(s)} é o Timóteo da casa`) }
+    catch (e) { toast.error('Erro'); console.error(e) }
+  }
+  const nomearSecretario = async (uid: string) => {
+    const s = membroDe(uid)
+    try { await setSecretario(cell.id, uid, nomeDe(s)); await carregar(); toast.success(`${nomeDe(s)} é o Secretário`) }
+    catch (e) { toast.error('Erro'); console.error(e) }
+  }
 
   return (
-    <div className="min-h-[calc(100dvh-56px)] bg-gray-50/50">
-      <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto max-w-5xl space-y-6">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+        <div className="mb-1 flex items-center gap-2 text-sm text-[#718096]"><span>Dashboard</span><span>/</span><span>Área do Líder</span></div>
+        <h1 className="flex items-center gap-2 font-heading text-2xl font-bold text-[#1A202C]">
+          <Church className="h-6 w-6 text-[#1A365D]" /> {cell.name}
+        </h1>
+        <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-[#718096]">
+          {cell.day && <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{cell.day} {cell.time}</span>}
+          {cell.location && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{cell.location}</span>}
+          <span className="flex items-center gap-1"><Users className="h-3 w-3" />{aprovados.length} membros</span>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <Badge variant="outline" className="text-[10px]">Líder: {cell.leaderName}</Badge>
+          {cell.timoteoName && <Badge variant="outline" className="text-[10px]">Timóteo: {cell.timoteoName}</Badge>}
+          {cell.secretarioName && <Badge variant="outline" className="text-[10px]">Secretário: {cell.secretarioName}</Badge>}
+        </div>
+      </motion.div>
 
-        {/* ========== HEADER ========== */}
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h1 className="font-heading text-2xl sm:text-3xl font-bold text-[#1A202C]">
-                Area do Lider
-              </h1>
-              <p className="text-[#718096] mt-1">
-                Dashboard exclusivo para lideres de celula — gerencie suas celulas, membros e relatorios
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {minhasCelulas.map((c, i) => (
-                <Button
-                  key={c.id}
-                  variant={celulaSelecionada === i ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setCelulaSelecionada(i)}
-                  className={celulaSelecionada === i ? 'bg-[#1A365D]' : ''}
-                >
-                  {c.name}
-                </Button>
-              ))}
-            </div>
-          </div>
-        </motion.div>
+      <Tabs defaultValue="membros">
+        <TabsList>
+          <TabsTrigger value="membros" className="gap-1.5 text-xs sm:text-sm">
+            <Users className="h-4 w-4" /> Membros
+            {pendentes.length > 0 && <Badge className="ml-1 bg-[#E8532D] px-1.5 text-[10px] text-white">{pendentes.length}</Badge>}
+          </TabsTrigger>
+          <TabsTrigger value="encontros" className="gap-1.5 text-xs sm:text-sm">
+            <HandHeart className="h-4 w-4" /> Encontros
+          </TabsTrigger>
+          <TabsTrigger value="estatisticas" className="gap-1.5 text-xs sm:text-sm">
+            <TrendingUp className="h-4 w-4" /> Números
+          </TabsTrigger>
+        </TabsList>
 
-        {/* ========== STATS CARDS ========== */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8"
-        >
-          <StatCard
-            titulo="Membros Ativos"
-            valor={String(celulaAtual.membrosAtivos)}
-            subtitulo={`de ${celulaAtual.members} cadastrados`}
-            icone={Users}
-            cor="bg-[#1A365D]"
-            tendencia="up"
-          />
-          <StatCard
-            titulo="Visitantes este Mes"
-            valor={`+${celulaAtual.visitantesMes}`}
-            subtitulo="Novos rostos"
-            icone={UserCheck}
-            cor="bg-[#D4A843]"
-            tendencia="up"
-          />
-          <StatCard
-            titulo="Conversoes no Ano"
-            valor={String(celulaAtual.conversoesAno)}
-            subtitulo="Vidas para Jesus"
-            icone={Heart}
-            cor="bg-green-600"
-            tendencia="up"
-          />
-          <StatCard
-            titulo="Prox. Multiplicacao"
-            valor={celulaAtual.multiplicacaoPrevista}
-            subtitulo="Meta planejada"
-            icone={Target}
-            cor="bg-purple-600"
-            tendencia="neutral"
-          />
-        </motion.div>
-
-        {/* ========== TABS ========== */}
-        <Tabs value={abaAtiva} onValueChange={setAbaAtiva} className="space-y-6">
-          <TabsList className="w-full sm:w-auto grid grid-cols-3 sm:grid-cols-6 gap-1">
-            <TabsTrigger value="visao-geral" className="gap-1.5 text-xs sm:text-sm">
-              <BarChart3 className="w-4 h-4 hidden sm:inline" />
-              Visao Geral
-            </TabsTrigger>
-            <TabsTrigger value="membros" className="gap-1.5 text-xs sm:text-sm">
-              <Users className="w-4 h-4 hidden sm:inline" />
-              Membros
-            </TabsTrigger>
-            <TabsTrigger value="relatorio" className="gap-1.5 text-xs sm:text-sm">
-              <FileText className="w-4 h-4 hidden sm:inline" />
-              Relatorio
-            </TabsTrigger>
-            <TabsTrigger value="estudos" className="gap-1.5 text-xs sm:text-sm">
-              <BookOpen className="w-4 h-4 hidden sm:inline" />
-              Estudos
-            </TabsTrigger>
-            <TabsTrigger value="encontro" className="gap-1.5 text-xs sm:text-sm">
-              <Calendar className="w-4 h-4 hidden sm:inline" />
-              Encontro
-            </TabsTrigger>
-            <TabsTrigger value="estatisticas" className="gap-1.5 text-xs sm:text-sm">
-              <TrendingUp className="w-4 h-4 hidden sm:inline" />
-              Estatisticas
-            </TabsTrigger>
-          </TabsList>
-
-          {/* ========== TAB: VISAO GERAL ========== */}
-          <TabsContent value="visao-geral" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Info da Celula */}
-              <Card className="border-0 shadow-sm lg:col-span-2">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Users className="w-5 h-5 text-[#1A365D]" />
-                    {celulaAtual.name}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                      <div className="w-9 h-9 rounded-full bg-[#1A365D]/10 flex items-center justify-center">
-                        <Calendar className="w-4 h-4 text-[#1A365D]" />
-                      </div>
-                      <div>
-                        <p className="text-xs text-[#718096]">Dia e Horario</p>
-                        <p className="text-sm font-medium text-[#1A202C]">{celulaAtual.day} - {celulaAtual.time}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                      <div className="w-9 h-9 rounded-full bg-[#1A365D]/10 flex items-center justify-center">
-                        <MapPin className="w-4 h-4 text-[#1A365D]" />
-                      </div>
-                      <div>
-                        <p className="text-xs text-[#718096]">Local</p>
-                        <p className="text-sm font-medium text-[#1A202C]">{celulaAtual.location}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                      <div className="w-9 h-9 rounded-full bg-[#1A365D]/10 flex items-center justify-center">
-                        <Users className="w-4 h-4 text-[#1A365D]" />
-                      </div>
-                      <div>
-                        <p className="text-xs text-[#718096]">Perfil</p>
-                        <p className="text-sm font-medium text-[#1A202C]">{celulaAtual.profile}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                      <div className="w-9 h-9 rounded-full bg-[#1A365D]/10 flex items-center justify-center">
-                        <Phone className="w-4 h-4 text-[#1A365D]" />
-                      </div>
-                      <div>
-                        <p className="text-xs text-[#718096]">Contato</p>
-                        <p className="text-sm font-medium text-[#1A202C]">{celulaAtual.phone}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Separator />
-
-                  {/* Progresso */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-[#1A202C]">Progresso para Multiplicacao</span>
-                      <span className="text-sm font-bold text-[#D4A843]">{Math.round((celulaAtual.membrosAtivos / 12) * 100)}%</span>
-                    </div>
-                    <Progress value={(celulaAtual.membrosAtivos / 12) * 100} className="h-2" />
-                    <p className="text-xs text-[#718096] mt-1">
-                      Meta: 12 membros para multiplicacao | Previsao: {celulaAtual.multiplicacaoPrevista}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Proximo Encontro */}
-              <Card className="border-0 shadow-sm">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-[#D4A843]" />
-                    Proximo Encontro
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="p-4 bg-[#1A365D]/5 rounded-xl border border-[#1A365D]/10">
-                    <p className="text-sm text-[#718096]">Data</p>
-                    <p className="text-lg font-bold text-[#1A202C]">
-                      {new Date(celulaAtual.proximoEncontro + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
-                    </p>
-                  </div>
-                  <div className="p-4 bg-[#D4A843]/5 rounded-xl border border-[#D4A843]/10">
-                    <p className="text-sm text-[#718096]">Tema da Semana</p>
-                    <p className="text-base font-semibold text-[#1A202C]">{celulaAtual.temaProximo}</p>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-[#1A202C]">Preparacao do Lider:</p>
-                    <ul className="space-y-1.5">
-                      <li className="flex items-center gap-2 text-sm text-[#4A5568]">
-                        <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
-                        Estudar a licao antes
-                      </li>
-                      <li className="flex items-center gap-2 text-sm text-[#4A5568]">
-                        <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
-                        Preparar perguntas de discussao
-                      </li>
-                      <li className="flex items-center gap-2 text-sm text-[#4A5568]">
-                        <Clock className="w-4 h-4 text-yellow-500 shrink-0" />
-                        Preparar ambiente e lanche
-                      </li>
-                      <li className="flex items-center gap-2 text-sm text-[#4A5568]">
-                        <Clock className="w-4 h-4 text-yellow-500 shrink-0" />
-                        Confirmar presenca dos membros
-                      </li>
-                    </ul>
-                  </div>
-                  <Button
-                    className="w-full bg-[#1A365D] hover:bg-[#0F2744] gap-2"
-                    onClick={() => setAbaAtiva('encontro')}
-                  >
-                    Ver Detalhes Completos
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Acoes Rapidas */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <Button
-                variant="outline"
-                className="h-auto py-4 flex flex-col items-center gap-2 border-[#1A365D]/20 hover:bg-[#1A365D]/5"
-                onClick={() => setAbaAtiva('relatorio')}
-              >
-                <FileText className="w-6 h-6 text-[#1A365D]" />
-                <span className="text-xs">Enviar Relatorio</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="h-auto py-4 flex flex-col items-center gap-2 border-[#D4A843]/20 hover:bg-[#D4A843]/5"
-                onClick={() => navigate('/member/curso-lideres')}
-              >
-                <BookOpen className="w-6 h-6 text-[#D4A843]" />
-                <span className="text-xs">Curso de Lideres</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="h-auto py-4 flex flex-col items-center gap-2 border-green-200 hover:bg-green-50"
-                onClick={() => setAbaAtiva('membros')}
-              >
-                <MessageSquare className="w-6 h-6 text-green-600" />
-                <span className="text-xs">Contatar Membros</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="h-auto py-4 flex flex-col items-center gap-2 border-purple-200 hover:bg-purple-50"
-                onClick={() => setAbaAtiva('estatisticas')}
-              >
-                <TrendingUp className="w-6 h-6 text-purple-600" />
-                <span className="text-xs">Ver Estatisticas</span>
-              </Button>
-            </div>
-          </TabsContent>
-
-          {/* ========== TAB: MEMBROS ========== */}
-          <TabsContent value="membros" className="space-y-6">
+        {/* ============================= MEMBROS ============================= */}
+        <TabsContent value="membros" className="mt-4 space-y-4">
+          {pendentes.length > 0 && (
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Users className="w-5 h-5 text-[#1A365D]" />
-                    Membros da Celula
-                  </div>
-                  <Badge variant="outline">{membrosCelula.length} membros</Badge>
+                <CardTitle className="text-sm text-[#92400E]">
+                  {pendentes.length} pessoa(s) pediram para entrar
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {membrosCelula.map((membro, i) => (
-                    <motion.div
-                      key={membro.id}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.05 }}
-                      className="flex items-center gap-4 p-4 rounded-xl hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100"
-                    >
-                      <div className="w-10 h-10 rounded-full bg-[#1A365D]/10 flex items-center justify-center shrink-0">
-                        <Users className="w-5 h-5 text-[#1A365D]" />
+              <CardContent className="space-y-2">
+                {pendentes.map((m) => {
+                  const s = membroDe(m.userId)
+                  return (
+                    <div key={m.id} className="flex items-center gap-2 rounded-lg bg-[#FFFBEB] px-3 py-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-[#1A202C]">{nomeDe(s)}</p>
+                        <p className="truncate text-[11px] text-[#718096]">{s?.email}</p>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-semibold text-[#1A202C] truncate">{membro.name}</p>
-                          <StatusBadge status={membro.status} />
-                        </div>
-                        <div className="flex items-center gap-3 mt-1 text-xs text-[#718096]">
-                          <span className="flex items-center gap-1">
-                            <Star className="w-3 h-3" />
-                            {membro.role}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Phone className="w-3 h-3" />
-                            {membro.phone}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Activity className="w-3 h-3" />
-                            Ultima: {membro.ultimaPresenca}
-                          </span>
-                        </div>
-                      </div>
-                      {membro.necessidadeOracao && (
-                        <Badge variant="outline" className="shrink-0 text-xs border-red-200 text-red-600 bg-red-50">
-                          <AlertCircle className="w-3 h-3 mr-1" />
-                          Oracao: {membro.necessidadeOracao}
-                        </Badge>
-                      )}
-                      <Button variant="ghost" size="sm" className="shrink-0 text-[#1A365D]">
-                        <Phone className="w-4 h-4" />
+                      <Button size="sm" disabled={busy === m.userId} onClick={() => aprovar(m.userId)}
+                        className="h-7 gap-1 bg-[#38A169] px-2 text-xs hover:bg-[#38A169]/90">
+                        {busy === m.userId ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />} Aceitar
                       </Button>
-                    </motion.div>
-                  ))}
-                </div>
+                      <Button size="sm" variant="ghost" disabled={busy === m.userId}
+                        onClick={() => remover(m.userId)} className="h-7 px-2 text-xs text-red-500">
+                        Recusar
+                      </Button>
+                    </div>
+                  )
+                })}
               </CardContent>
             </Card>
-          </TabsContent>
+          )}
 
-          {/* ========== TAB: RELATORIO ========== */}
-          <TabsContent value="relatorio" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Formulario */}
-              <Card className="border-0 shadow-sm lg:col-span-2">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-[#1A365D]" />
-                    Relatorio Semanal
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-5">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="data">Data do Encontro</Label>
-                      <Input
-                        id="data"
-                        type="date"
-                        value={formRelatorio.dataEncontro}
-                        onChange={(e) => setFormRelatorio({ ...formRelatorio, dataEncontro: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="presentes">Membros Presentes</Label>
-                      <Input
-                        id="presentes"
-                        type="number"
-                        placeholder="Quantos membros?"
-                        value={formRelatorio.presentes}
-                        onChange={(e) => setFormRelatorio({ ...formRelatorio, presentes: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="visitantes">Visitantes</Label>
-                      <Input
-                        id="visitantes"
-                        type="number"
-                        placeholder="Quantos visitantes?"
-                        value={formRelatorio.visitantes}
-                        onChange={(e) => setFormRelatorio({ ...formRelatorio, visitantes: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="convertidos">Novos Convertidos</Label>
-                      <Input
-                        id="convertidos"
-                        type="number"
-                        placeholder="Alguma conversao?"
-                        value={formRelatorio.novosConvertidos}
-                        onChange={(e) => setFormRelatorio({ ...formRelatorio, novosConvertidos: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2 sm:col-span-2">
-                      <Label htmlFor="oferta">Oferta</Label>
-                      <Input
-                        id="oferta"
-                        placeholder="R$ 0,00"
-                        value={formRelatorio.oferta}
-                        onChange={(e) => setFormRelatorio({ ...formRelatorio, oferta: e.target.value })}
-                      />
-                    </div>
-                  </div>
-
-                  <Separator />
-
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="louvor">Louvor / Adoracao</Label>
-                      <Textarea
-                        id="louvor"
-                        placeholder="Como foi o momento de louvor? Quais musicas?..."
-                        value={formRelatorio.louvor}
-                        onChange={(e) => setFormRelatorio({ ...formRelatorio, louvor: e.target.value })}
-                        className="min-h-[60px]"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="palavra">Palavra / Estudo</Label>
-                      <Textarea
-                        id="palavra"
-                        placeholder="Qual foi o tema estudado? Como foi a dinamica?..."
-                        value={formRelatorio.palavra}
-                        onChange={(e) => setFormRelatorio({ ...formRelatorio, palavra: e.target.value })}
-                        className="min-h-[60px]"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="perguntas">Compartilhamento / Perguntas</Label>
-                      <Textarea
-                        id="perguntas"
-                        placeholder="Como foi o momento de compartilhamento?..."
-                        value={formRelatorio.perguntas}
-                        onChange={(e) => setFormRelatorio({ ...formRelatorio, perguntas: e.target.value })}
-                        className="min-h-[60px]"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="oracao">Oracao</Label>
-                      <Textarea
-                        id="oracao"
-                        placeholder="Como foi o momento de oracao? Algum pedido especial?..."
-                        value={formRelatorio.oracao}
-                        onChange={(e) => setFormRelatorio({ ...formRelatorio, oracao: e.target.value })}
-                        className="min-h-[60px]"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="compromissos">Compromissos para Proxima Semana</Label>
-                      <Textarea
-                        id="compromissos"
-                        placeholder="O que foi decidido? Quais os proximos passos?..."
-                        value={formRelatorio.compromissos}
-                        onChange={(e) => setFormRelatorio({ ...formRelatorio, compromissos: e.target.value })}
-                        className="min-h-[60px]"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="observacoes">Observacoes Gerais</Label>
-                      <Textarea
-                        id="observacoes"
-                        placeholder="Algo mais que gostaria de relatar?..."
-                        value={formRelatorio.observacoes}
-                        onChange={(e) => setFormRelatorio({ ...formRelatorio, observacoes: e.target.value })}
-                        className="min-h-[60px]"
-                      />
-                    </div>
-                  </div>
-
-                  <Button
-                    onClick={handleSubmitRelatorio}
-                    className="w-full bg-[#1A365D] hover:bg-[#0F2744] gap-2"
-                  >
-                    <Send className="w-4 h-4" />
-                    Enviar Relatorio ao Pastor
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* Relatorios Anteriores */}
-              <Card className="border-0 shadow-sm">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-[#D4A843]" />
-                    Relatorios Anteriores
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {relatoriosAnteriores.map((rel) => (
-                    <div
-                      key={rel.id}
-                      className="p-4 rounded-xl border border-gray-100 hover:border-gray-200 transition-colors"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-[#1A202C]">{rel.semana}</span>
-                        {rel.encontroRealizado ? (
-                          <Badge className="bg-green-100 text-green-700 hover:bg-green-100 text-xs">Realizado</Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-xs">Nao realizado</Badge>
+          <Card className="border-0 shadow-md">
+            <CardHeader className="flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle className="text-base">Membros da célula ({aprovados.length})</CardTitle>
+                <CardDescription>Nomeie aqui o Timóteo da casa e o Secretário.</CardDescription>
+              </div>
+              {souLider && (
+                <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1 bg-[#1A365D] hover:bg-[#1A365D]/90">
+                  <UserPlus className="h-4 w-4" /> Adicionar
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent>
+              {aprovados.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-gray-200 py-10 text-center text-sm text-[#718096]">
+                  Nenhum membro ainda. Clique em "Adicionar".
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {aprovados.map((m) => {
+                    const s = membroDe(m.userId)
+                    const ehTimoteo = cell.timoteoId === m.userId
+                    const ehSecretario = cell.secretarioId === m.userId
+                    return (
+                      <div key={m.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-100 px-3 py-2.5">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-[#1A202C]">{nomeDe(s)}</p>
+                          <p className="truncate text-[11px] text-[#718096]">{s?.email}</p>
+                        </div>
+                        {ehTimoteo && <Badge className="bg-[#7C2D12] text-[10px] text-white">Timóteo</Badge>}
+                        {ehSecretario && <Badge className="bg-[#0E7490] text-[10px] text-white">Secretário</Badge>}
+                        {souLider && (
+                          <div className="flex gap-1">
+                            {!ehTimoteo && (
+                              <Button size="sm" variant="outline" className="h-7 px-2 text-[11px]"
+                                onClick={() => nomearTimoteo(m.userId)}>Timóteo</Button>
+                            )}
+                            {!ehSecretario && (
+                              <Button size="sm" variant="outline" className="h-7 px-2 text-[11px]"
+                                onClick={() => nomearSecretario(m.userId)}>Secretário</Button>
+                            )}
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500"
+                              onClick={() => remover(m.userId)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         )}
                       </div>
-                      {rel.encontroRealizado && (
-                        <div className="grid grid-cols-3 gap-2 text-xs text-[#718096]">
-                          <span>{rel.presentes} presentes</span>
-                          <span>{rel.visitantes} visitas</span>
-                          <span>{rel.novosConvertidos} conversoes</span>
-                        </div>
-                      )}
-                      {rel.observacoes && (
-                        <p className="text-xs text-[#4A5568] mt-2 italic">{rel.observacoes}</p>
-                      )}
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          {/* ========== TAB: ESTUDOS ========== */}
-          <TabsContent value="estudos" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Material da Semana */}
-              <Card className="border-0 shadow-sm lg:col-span-2">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <BookOpen className="w-5 h-5 text-[#1A365D]" />
-                    Material de Estudo — Semana Atual
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-5">
-                  <div className="p-5 bg-[#1A365D]/5 rounded-xl border border-[#1A365D]/10">
-                    <p className="text-sm text-[#718096]">Tema da Semana</p>
-                    <p className="text-xl font-bold text-[#1A202C] mt-1">{materialSemana.tema}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <Badge variant="outline" className="text-[#D4A843] border-[#D4A843]/40">
-                        {materialSemana.versiculoChave}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-[#4A5568] mt-3 italic">
-                      "{materialSemana.textoVersiculo}"
-                    </p>
-                  </div>
-
-                  <div>
-                    <h3 className="text-sm font-semibold text-[#1A202C] mb-3">Aulas do Curso de Lideres</h3>
-                    <div className="space-y-3">
-                      {materialSemana.licoes.map((aula, i) => (
-                        <div
-                          key={i}
-                          className="flex items-center gap-4 p-4 rounded-xl border border-gray-100 hover:border-gray-200 transition-colors cursor-pointer"
-                          onClick={() => navigate('/member/curso-lideres?licao=1')}
-                        >
-                          <div className="w-12 h-12 rounded-lg bg-[#0F2744] flex items-center justify-center shrink-0">
-                            <Play className="w-5 h-5 text-[#D4A843]" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-[#1A202C] truncate">{aula.titulo}</p>
-                            <p className="text-xs text-[#718096]">{aula.duracao}</p>
-                          </div>
-                          <ChevronRight className="w-5 h-5 text-[#718096] shrink-0" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="text-sm font-semibold text-[#1A202C] mb-3">Perguntas para Discussao</h3>
-                    <div className="space-y-2">
-                      {materialSemana.perguntasDiscussao.map((pergunta, i) => (
-                        <div key={i} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-                          <div className="w-6 h-6 rounded-full bg-[#1A365D] flex items-center justify-center shrink-0 mt-0.5">
-                            <span className="text-white text-xs font-bold">{i + 1}</span>
-                          </div>
-                          <p className="text-sm text-[#1A202C]">{pergunta}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <Button
-                    className="w-full bg-[#D4A843] hover:bg-[#c49a3b] text-[#0F2744] font-semibold gap-2"
-                    onClick={() => navigate('/member/curso-lideres')}
-                  >
-                    <BookOpen className="w-4 h-4" />
-                    Acessar Curso Completo
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* Links Uteis */}
-              <Card className="border-0 shadow-sm">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <BookOpen className="w-5 h-5 text-[#D4A843]" />
-                    Links Uteis
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start gap-2 border-[#1A365D]/20 hover:bg-[#1A365D]/5"
-                    onClick={() => navigate('/member/curso-lideres')}
-                  >
-                    <Users className="w-4 h-4 text-[#1A365D]" />
-                    Curso de Lideres de Celulas
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start gap-2 border-[#D4A843]/20 hover:bg-[#D4A843]/5"
-                    onClick={() => navigate('/member/curso-missoes')}
-                  >
-                    <Globe className="w-4 h-4 text-[#D4A843]" />
-                    Escola de Missoes
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start gap-2 border-green-200 hover:bg-green-50"
-                    onClick={() => navigate('/member/dashboard-metodo-33')}
-                  >
-                    <Target className="w-4 h-4 text-green-600" />
-                    Metodo 3/3
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start gap-2 border-purple-200 hover:bg-purple-50"
-                    onClick={() => navigate('/member/meu-celula')}
-                  >
-                    <Users className="w-4 h-4 text-purple-600" />
-                    Minha Celula
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          {/* ========== TAB: ENCONTRO ========== */}
-          <TabsContent value="encontro" className="space-y-6">
-            <Card className="border-0 shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-[#1A365D]" />
-                  Guia do Proximo Encontro
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Timeline do Encontro */}
-                <div className="space-y-4">
-                  {[
-                    { tempo: '0:00-0:10', titulo: 'Boas-vindas e Integracao', desc: 'Receba os membros e visitantes. Conversa leve, lanche. Crie um ambiente acolhedor.', icone: Users, cor: 'bg-blue-500' },
-                    { tempo: '0:10-0:20', titulo: 'Louvor e Adoracao', desc: '2-3 musicas. Pode ser playback, violao ou a capella. O importante e a adoracao sincera.', icone: Heart, cor: 'bg-purple-500' },
-                    { tempo: '0:20-0:35', titulo: 'Palavra — ' + celulaAtual.temaProximo, desc: 'Estude a licao do curso. Faca perguntas abertas. Inclua todos no compartilhamento.', icone: BookOpen, cor: 'bg-[#1A365D]' },
-                    { tempo: '0:35-0:45', titulo: 'Compartilhamento e Oracao', desc: 'Perguntas de discussao. Compartilhamento aberto. Orem uns pelos outros.', icone: MessageSquare, cor: 'bg-orange-500' },
-                    { tempo: '0:45-0:50', titulo: 'Ponto de Obediencia e Despedida', desc: 'Estabeleca um compromisso para a semana. Ore pela despesa. Agende o proximo encontro.', icone: Target, cor: 'bg-green-500' },
-                  ].map((etapa, i) => (
-                    <motion.div
-                      key={i}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.1 }}
-                      className="flex items-start gap-4"
-                    >
-                      <div className="flex flex-col items-center shrink-0">
-                        <div className={`w-10 h-10 rounded-full ${etapa.cor} flex items-center justify-center`}>
-                          <etapa.icone className="w-5 h-5 text-white" />
-                        </div>
-                        {i < 4 && <div className="w-0.5 h-full bg-gray-200 my-1" />}
-                      </div>
-                      <div className="flex-1 pb-4">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Badge variant="outline" className="text-xs">{etapa.tempo}</Badge>
-                          <h4 className="font-semibold text-[#1A202C]">{etapa.titulo}</h4>
-                        </div>
-                        <p className="text-sm text-[#4A5568]">{etapa.desc}</p>
-                      </div>
-                    </motion.div>
-                  ))}
+                    )
+                  })}
                 </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-                <Separator />
-
-                {/* Checklist do Lider */}
-                <div>
-                  <h3 className="text-sm font-semibold text-[#1A202C] mb-3">Checklist do Lider</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {[
-                      'Confirmar presenca dos membros 1 dia antes',
-                      'Preparar o ambiente (limpeza, cadeiras, iluminacao)',
-                      'Separar material de estudo (Biblia, caderno)',
-                      'Preparar playlist de louvor',
-                      'Preparar lanche',
-                      'Revisar a licao e preparar perguntas',
-                      'Orar antes do encontro',
-                      'Ter lista de oracao da celula a mao',
-                    ].map((item, i) => (
-                      <div key={i} className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50">
-                        <input type="checkbox" id={`check-${i}`} className="w-4 h-4 rounded border-gray-300 text-[#1A365D]" />
-                        <label htmlFor={`check-${i}`} className="text-sm text-[#4A5568] cursor-pointer">{item}</label>
-                      </div>
-                    ))}
-                  </div>
+        {/* ============================ ENCONTROS ============================ */}
+        <TabsContent value="encontros" className="mt-4 space-y-4">
+          <Card className="border-0 shadow-md">
+            <CardHeader className="flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle className="text-base">Relatórios de encontro</CardTitle>
+                <CardDescription>Presença, visitantes, decisões e oferta.</CardDescription>
+              </div>
+              <Button size="sm" onClick={() => setReportOpen(true)} className="gap-1 bg-[#1A365D] hover:bg-[#1A365D]/90">
+                <Plus className="h-4 w-4" /> Novo encontro
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {meetings.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-gray-200 py-10 text-center text-sm text-[#718096]">
+                  Nenhum encontro registrado ainda.
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* ========== TAB: ESTATISTICAS ========== */}
-          <TabsContent value="estatisticas" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Frequencia Mensal */}
-              <Card className="border-0 shadow-sm">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Users className="w-5 h-5 text-[#1A365D]" />
-                    Frequencia Mensal
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {estatisticasMensais.map((mes, i) => (
-                      <div key={i}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium text-[#1A202C]">{mes.mes}</span>
-                          <span className="text-sm text-[#718096]">{mes.presentes} presentes | {mes.visitantes} visitantes</span>
-                        </div>
-                        <div className="flex gap-1">
-                          <div className="h-4 bg-[#1A365D] rounded-sm" style={{ width: `${(mes.presentes / 12) * 100}%` }} />
-                          <div className="h-4 bg-[#D4A843] rounded-sm" style={{ width: `${(mes.visitantes / 12) * 100}%` }} />
-                        </div>
+              ) : (
+                <div className="space-y-2">
+                  {meetings.map((m) => (
+                    <div key={m.id} className="rounded-lg border border-gray-100 px-3 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium text-[#1A202C]">
+                          {new Date(m.date + 'T00:00:00').toLocaleDateString('pt-BR')}
+                        </p>
+                        <Badge variant="outline" className="text-[10px]">{m.attendance?.length || 0} presentes</Badge>
+                        {(m.visitors ?? 0) > 0 && <Badge variant="outline" className="text-[10px]">{m.visitors} visitante(s)</Badge>}
+                        {(m.decisions ?? 0) > 0 && <Badge className="bg-[#38A169] text-[10px] text-white">{m.decisions} decisão(ões)</Badge>}
                       </div>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-4 mt-4 text-xs text-[#718096]">
-                    <span className="flex items-center gap-1">
-                      <div className="w-3 h-3 bg-[#1A365D] rounded-sm" /> Membros
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <div className="w-3 h-3 bg-[#D4A843] rounded-sm" /> Visitantes
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
 
-              {/* Resumo do Ano */}
-              <Card className="border-0 shadow-sm">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-[#D4A843]" />
-                    Resumo do Ano
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 gap-4">
-                    {[
-                      { label: 'Encontros Realizados', valor: '42', cor: 'text-[#1A365D]' },
-                      { label: 'Total de Presentes', valor: '336', cor: 'text-[#1A365D]' },
-                      { label: 'Visitantes Recebidos', valor: '28', cor: 'text-[#D4A843]' },
-                      { label: 'Novos Convertidos', valor: '5', cor: 'text-green-600' },
-                      { label: 'Batismos', valor: '3', cor: 'text-blue-600' },
-                      { label: 'Novos Lideres Formados', valor: '2', cor: 'text-purple-600' },
-                      { label: 'Multiplicacoes', valor: '0', cor: 'text-[#718096]' },
-                      { label: 'Membros Ativos Hoje', valor: String(celulaAtual.membrosAtivos), cor: 'text-[#1A365D]' },
-                    ].map((item, i) => (
-                      <div key={i} className="p-4 bg-gray-50 rounded-xl text-center">
-                        <p className={`text-2xl font-bold ${item.cor}`}>{item.valor}</p>
-                        <p className="text-xs text-[#718096] mt-1">{item.label}</p>
+                      {/* ---------- Oferta: fluxo de duas pessoas ---------- */}
+                      <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-gray-50 pt-2">
+                        <Wallet className="h-3.5 w-3.5 text-[#718096]" />
+
+                        {m.offeringStatus === 'pendente' && (
+                          <>
+                            <span className="text-xs text-[#718096]">Oferta não lançada</span>
+                            {souSecretario && (
+                              <Button size="sm" variant="outline" className="h-7 px-2 text-[11px]"
+                                onClick={() => setOfferingFor(m)}>
+                                Lançar oferta
+                              </Button>
+                            )}
+                          </>
+                        )}
+
+                        {m.offeringStatus === 'lancada' && (
+                          <>
+                            <span className="text-xs font-medium text-[#1A202C]">{brl(m.offeringAmount || 0)}</span>
+                            <Badge className="bg-[#F59E0B] text-[10px] text-white">Aguardando confirmação</Badge>
+                            <span className="text-[11px] text-[#718096]">lançada por {m.offeringByName}</span>
+                            {souLider && (
+                              <Button size="sm" className="h-7 gap-1 bg-[#38A169] px-2 text-[11px] hover:bg-[#38A169]/90"
+                                onClick={async () => {
+                                  try {
+                                    await confirmOffering(cell.id, m.id, user!.uid, meuNome)
+                                    await carregar()
+                                    toast.success('Oferta confirmada e travada')
+                                  } catch (e) { toast.error('Erro ao confirmar'); console.error(e) }
+                                }}>
+                                <Check className="h-3 w-3" /> Confirmar
+                              </Button>
+                            )}
+                          </>
+                        )}
+
+                        {m.offeringStatus === 'confirmada' && (
+                          <>
+                            <span className="text-xs font-semibold text-[#1A202C]">{brl(m.offeringAmount || 0)}</span>
+                            <Badge className="gap-1 bg-[#38A169] text-[10px] text-white">
+                              <Lock className="h-2.5 w-2.5" /> Confirmada
+                            </Badge>
+                            <span className="text-[11px] text-[#718096]">
+                              {m.offeringByName} lançou · {m.confirmedByName} confirmou
+                            </span>
+                            {(m.corrections?.length ?? 0) > 0 && (
+                              <Badge variant="outline" className="gap-1 text-[10px] text-[#92400E]">
+                                <AlertTriangle className="h-2.5 w-2.5" /> corrigida pelo admin
+                              </Badge>
+                            )}
+                          </>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
 
-            {/* Crescimento */}
-            <Card className="border-0 shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-green-600" />
-                  Evolucao da Celula
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-end gap-2 h-48">
-                  {[
-                    { mes: 'Out', membros: 5, altura: 35 },
-                    { mes: 'Nov', membros: 6, altura: 42 },
-                    { mes: 'Dez', membros: 7, altura: 50 },
-                    { mes: 'Jan', membros: 8, altura: 58 },
-                    { mes: 'Fev', membros: 9, altura: 67 },
-                    { mes: 'Mar', membros: 10, altura: 75 },
-                    { mes: 'Abr', membros: 10, altura: 75 },
-                    { mes: 'Mai', membros: 11, altura: 83 },
-                    { mes: 'Jun', membros: 12, altura: 92 },
-                  ].map((m, i) => (
-                    <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                      <span className="text-xs font-medium text-[#1A202C]">{m.membros}</span>
-                      <div
-                        className="w-full bg-[#1A365D] rounded-t-sm transition-all hover:bg-[#D4A843]"
-                        style={{ height: `${m.altura * 1.5}px` }}
-                      />
-                      <span className="text-xs text-[#718096]">{m.mes}</span>
+                      {m.notes && <p className="mt-2 text-xs text-[#718096]">{m.notes}</p>}
                     </div>
                   ))}
                 </div>
-                <div className="mt-4 p-4 bg-green-50 rounded-xl border border-green-100">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-green-600" />
-                    <span className="text-sm font-semibold text-green-700">Crescimento de 100% em 9 meses!</span>
-                  </div>
-                  <p className="text-xs text-green-600 mt-1">
-                    Sua celula cresceu de 5 para 10 membros ativos. Continue discipulando e multiplicando!
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ========================== ESTATÍSTICAS =========================== */}
+        <TabsContent value="estatisticas" className="mt-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              { label: 'Encontros', value: String(stats.encontros) },
+              { label: 'Presença média', value: String(stats.presencaMedia) },
+              { label: 'Visitantes', value: String(stats.totalVisitantes) },
+              { label: 'Decisões por Cristo', value: String(stats.totalDecisoes) },
+              { label: 'Ofertas confirmadas', value: brl(stats.totalOfertas) },
+              { label: 'Ofertas a confirmar', value: String(stats.ofertasPendentes) },
+            ].map((s) => (
+              <Card key={s.label} className="border-0 shadow-sm">
+                <CardContent className="py-5">
+                  <p className="text-xs text-[#718096]">{s.label}</p>
+                  <p className="mt-1 font-heading text-2xl font-bold text-[#1A365D]">{s.value}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-[#718096]">
+            O total de ofertas só soma o que já foi <b>confirmado pelas duas pessoas</b> (secretário e líder).
+          </p>
+        </TabsContent>
+      </Tabs>
+
+      <AddMemberDialog
+        open={addOpen} onOpenChange={setAddOpen}
+        students={students} jaNaCelula={memberships.map((m) => m.userId)}
+        onAdd={incluir} busy={busy}
+      />
+      <ReportDialog
+        open={reportOpen} onOpenChange={setReportOpen}
+        cell={cell} aprovados={aprovados} membroDe={membroDe}
+        onSaved={carregar} reportedBy={user?.uid || ''}
+      />
+      <OfferingDialog
+        meeting={offeringFor} cellId={cell.id}
+        onClose={() => setOfferingFor(null)} onSaved={carregar}
+        byUid={user?.uid || ''} byName={meuNome}
+      />
     </div>
   )
 }
 
+// ------------------------- Adicionar membro à célula -------------------------
+function AddMemberDialog({ open, onOpenChange, students, jaNaCelula, onAdd, busy }: {
+  open: boolean; onOpenChange: (v: boolean) => void; students: Student[]
+  jaNaCelula: string[]; onAdd: (uid: string) => void; busy: string | null
+}) {
+  const [search, setSearch] = useState('')
+  useEffect(() => { if (open) setSearch('') }, [open])
 
+  const candidatos = students
+    .filter((s) => !jaNaCelula.includes(s.id))
+    .filter((s) => `${s.displayName || ''} ${s.email || ''}`.toLowerCase().includes(search.toLowerCase()))
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Adicionar membro</DialogTitle>
+          <DialogDescription>Busque entre os membros da igreja.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#718096]" />
+            <Input placeholder="Buscar por nome ou e-mail" value={search}
+              onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          </div>
+          <div className="max-h-[300px] space-y-1 overflow-y-auto">
+            {candidatos.length === 0 ? (
+              <p className="py-8 text-center text-sm text-[#718096]">Ninguém encontrado.</p>
+            ) : candidatos.map((s) => (
+              <div key={s.id} className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-[#1A202C]">{nomeDe(s)}</p>
+                  <p className="truncate text-[11px] text-[#718096]">{s.email}</p>
+                </div>
+                <Button size="sm" disabled={busy === s.id} onClick={() => onAdd(s.id)}
+                  className="h-7 bg-[#1A365D] px-2 text-xs hover:bg-[#1A365D]/90">
+                  {busy === s.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Incluir'}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// --------------------------- Relatório do encontro ---------------------------
+function ReportDialog({ open, onOpenChange, cell, aprovados, membroDe, onSaved, reportedBy }: {
+  open: boolean; onOpenChange: (v: boolean) => void; cell: Cell
+  aprovados: Membership[]; membroDe: (uid: string) => Student | undefined
+  onSaved: () => void; reportedBy: string
+}) {
+  const [date, setDate] = useState('')
+  const [presentes, setPresentes] = useState<string[]>([])
+  const [visitors, setVisitors] = useState('0')
+  const [decisions, setDecisions] = useState('0')
+  const [notes, setNotes] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    setDate(new Date().toISOString().slice(0, 10))
+    setPresentes([])
+    setVisitors('0'); setDecisions('0'); setNotes('')
+  }, [open])
+
+  const toggle = (uid: string) =>
+    setPresentes((p) => p.includes(uid) ? p.filter((x) => x !== uid) : [...p, uid])
+
+  const save = async () => {
+    if (!date) { toast.error('Informe a data'); return }
+    setSaving(true)
+    try {
+      await saveMeeting(cell.id, {
+        date,
+        attendance: presentes,
+        visitors: parseInt(visitors) || 0,
+        decisions: parseInt(decisions) || 0,
+        notes,
+      }, reportedBy)
+      toast.success('Encontro registrado. O secretário já pode lançar a oferta.')
+      onOpenChange(false)
+      onSaved()
+    } catch (e) { toast.error('Erro ao salvar'); console.error(e) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Relatório do encontro</DialogTitle>
+          <DialogDescription>
+            A oferta não é lançada aqui — quem lança é o Secretário, na lista de encontros.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <Label>Data</Label>
+              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Visitantes</Label>
+              <Input type="number" min="0" value={visitors} onChange={(e) => setVisitors(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Decisões</Label>
+              <Input type="number" min="0" value={decisions} onChange={(e) => setDecisions(e.target.value)} />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label>Presença ({presentes.length}/{aprovados.length})</Label>
+              <button type="button" className="text-xs text-[#1A365D] hover:underline"
+                onClick={() => setPresentes(aprovados.map((m) => m.userId))}>
+                Marcar todos
+              </button>
+            </div>
+            <div className="max-h-[200px] overflow-y-auto rounded-lg border border-gray-100">
+              {aprovados.length === 0 ? (
+                <p className="py-6 text-center text-xs text-[#718096]">Sem membros cadastrados.</p>
+              ) : aprovados.map((m) => (
+                <label key={m.id} className="flex cursor-pointer items-center gap-3 border-b border-gray-50 px-3 py-2 last:border-0 hover:bg-[#F7FAFC]">
+                  <input type="checkbox" checked={presentes.includes(m.userId)}
+                    onChange={() => toggle(m.userId)} className="h-4 w-4 rounded border-gray-300" />
+                  <span className="text-sm text-[#1A202C]">{nomeDe(membroDe(m.userId))}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Observações</Label>
+            <Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)}
+              placeholder="Como foi o encontro? Algum pedido de oração?" />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button onClick={save} disabled={saving} className="bg-[#1A365D] hover:bg-[#1A365D]/90">
+            {saving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} Salvar encontro
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ------------------------------ Lançar a oferta ------------------------------
+function OfferingDialog({ meeting, cellId, onClose, onSaved, byUid, byName }: {
+  meeting: Meeting | null; cellId: string; onClose: () => void
+  onSaved: () => void; byUid: string; byName: string
+}) {
+  const [valor, setValor] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { if (meeting) setValor('') }, [meeting])
+
+  const lancar = async () => {
+    const v = parseFloat(valor.replace(',', '.'))
+    if (isNaN(v) || v < 0) { toast.error('Informe um valor válido'); return }
+    if (!meeting) return
+    setSaving(true)
+    try {
+      await launchOffering(cellId, meeting.id, v, byUid, byName)
+      toast.success('Oferta lançada. Agora o líder precisa confirmar.')
+      onClose()
+      onSaved()
+    } catch (e) { toast.error('Erro ao lançar'); console.error(e) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <Dialog open={!!meeting} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Lançar oferta</DialogTitle>
+          <DialogDescription>
+            Você conta e lança. Em seguida o líder confere e confirma.
+            Depois de confirmada, o valor trava — só o pastor corrige, e a correção fica registrada.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 py-2">
+          <div className="space-y-1.5">
+            <Label>Valor contado (R$)</Label>
+            <Input value={valor} onChange={(e) => setValor(e.target.value)}
+              placeholder="Ex.: 150,00" inputMode="decimal" />
+          </div>
+          <div className="rounded-lg bg-[#FFFBEB] px-3 py-2 text-xs text-[#92400E]">
+            Confira a contagem antes de lançar. Seu nome ficará registrado como responsável.
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={lancar} disabled={saving} className="bg-[#1A365D] hover:bg-[#1A365D]/90">
+            {saving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} Lançar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
