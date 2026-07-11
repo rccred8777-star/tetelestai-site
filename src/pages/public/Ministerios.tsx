@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Clock, Users, ArrowRight } from 'lucide-react'
 import { ministries } from '@/data/mock'
@@ -49,9 +50,9 @@ export default function Ministerios() {
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="max-w-[1200px] mx-auto px-4 sm:px-6 text-center text-white">
           <h2 className="font-heading text-3xl font-bold mb-3">Quero Ser Voluntário</h2>
           <p className="text-white/80 max-w-xl mx-auto mb-6">Todos têm um talento para servir. Deixe-nos ajudá-lo a encontrar o seu lugar.</p>
-          <button onClick={() => alert('Em breve!')} className="inline-flex items-center gap-2 px-6 py-3 bg-white text-[#E8532D] font-medium rounded-lg hover:bg-white/90 transition-colors">
+          <Link to="/contato" className="inline-flex items-center gap-2 px-6 py-3 bg-white text-[#E8532D] font-medium rounded-lg hover:bg-white/90 transition-colors">
             Inscreva-se <ArrowRight className="w-4 h-4" />
-          </button>
+          </Link>
         </motion.div>
       </section>
     </div>
