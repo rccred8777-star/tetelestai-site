@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import { motion } from 'framer-motion'
 import {
   Users, UserCheck, BookOpen, Heart, TrendingUp, BarChart3,
@@ -87,13 +89,13 @@ const statusConfig: Record<string, { label: string; variant: string }> = {
   needs_leader: { label: 'Precisa de Lider', variant: 'bg-[#E8532D] text-white hover:bg-[#E8532D]' },
 }
 
-const quickActions = [
-  { icon: Mail, label: 'Enviar Comunicado' },
+const quickActions: { icon: typeof Mail; label: string; href?: string }[] = [
+  { icon: Mail, label: 'Enviar Comunicado', href: '/admin/comunicados' },
+  { icon: CalendarDays, label: 'Criar Evento', href: '/admin/eventos' },
+  { icon: UserCircle, label: 'Gerenciar Membros', href: '/admin/alunos' },
+  { icon: GraduationCap, label: 'Gerenciar Cursos', href: '/admin/cursos' },
   { icon: FileText, label: 'Gerar Relatorio' },
-  { icon: UserCircle, label: 'Cadastrar Membro' },
-  { icon: CalendarDays, label: 'Criar Evento' },
   { icon: ClipboardList, label: 'Lista de Presenca' },
-  { icon: Heart, label: 'Ver Doacoes' },
 ]
 
 // ============ COMPONENTS ============
@@ -665,6 +667,13 @@ function ChartsPanel() {
 }
 
 function QuickActionsPanel() {
+  const navigate = useNavigate()
+
+  const handleAction = (href?: string) => {
+    if (href) navigate(href)
+    else toast.info('Esse recurso ainda esta em desenvolvimento.')
+  }
+
   return (
     <motion.div custom={8} variants={fadeInUp} initial="hidden" animate="visible">
       <Card className="border-0 shadow-md">
@@ -678,7 +687,7 @@ function QuickActionsPanel() {
                 key={a.label}
                 variant="outline"
                 className="h-auto py-4 gap-2 justify-start hover:bg-[#1A365D] hover:text-white hover:border-[#1A365D] transition-all"
-                onClick={() => alert('Em breve!')}
+                onClick={() => handleAction(a.href)}
               >
                 <a.icon className="w-5 h-5" />
                 <span className="text-sm">{a.label}</span>

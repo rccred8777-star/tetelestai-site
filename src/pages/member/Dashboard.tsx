@@ -147,16 +147,18 @@ export default function Dashboard() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
         <div className="flex flex-wrap gap-3">
           {[
-            { label: 'Assistir Culto', icon: Play, variant: 'default' as const },
-            { label: 'Ver Mensagem', icon: BookOpen, variant: 'outline' as const },
-            { label: 'Fazer Doação', icon: Heart, variant: 'outline' as const },
-            { label: 'Pedir Oração', icon: HandHelping, variant: 'ghost' as const },
-            { label: 'Convidar Amigo', icon: Users, variant: 'ghost' as const },
-            { label: 'Ver Calendário', icon: Clock, variant: 'ghost' as const },
+            { label: 'Assistir Culto', icon: Play, variant: 'default' as const, href: '/midia-membro' },
+            { label: 'Meus Cursos', icon: BookOpen, variant: 'outline' as const, href: '/cursos' },
+            { label: 'Fazer Doação', icon: Heart, variant: 'outline' as const, href: '/minhas-doacoes' },
+            { label: 'Pedir Oração', icon: HandHelping, variant: 'ghost' as const, href: '/contato' },
+            { label: 'Comunicados', icon: Users, variant: 'ghost' as const, href: '/comunicados' },
+            { label: 'Ver Calendário', icon: Clock, variant: 'ghost' as const, href: '/meus-eventos' },
           ].map((action) => (
-            <Button key={action.label} variant={action.variant} size="sm" className={action.variant === 'default' ? 'bg-[#1A365D] hover:bg-[#2C5282] gap-2' : action.variant === 'outline' ? 'border-[#1A365D] text-[#1A365D] hover:bg-[#1A365D] hover:text-white gap-2' : 'text-[#4A5568] hover:text-[#1A202C] gap-2'} onClick={() => alert('Em breve!')}>
-              <action.icon className="w-4 h-4" />
-              {action.label}
+            <Button key={action.label} asChild variant={action.variant} size="sm" className={action.variant === 'default' ? 'bg-[#1A365D] hover:bg-[#2C5282] gap-2' : action.variant === 'outline' ? 'border-[#1A365D] text-[#1A365D] hover:bg-[#1A365D] hover:text-white gap-2' : 'text-[#4A5568] hover:text-[#1A202C] gap-2'}>
+              <Link to={action.href}>
+                <action.icon className="w-4 h-4" />
+                {action.label}
+              </Link>
             </Button>
           ))}
         </div>
