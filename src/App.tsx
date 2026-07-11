@@ -36,6 +36,7 @@ import AdminAlunos from '@/pages/member/AdminAlunos'
 import AdminComunicados from '@/pages/member/AdminComunicados'
 import AdminEventos from '@/pages/member/AdminEventos'
 import AdminCelulas from '@/pages/member/AdminCelulas'
+import AreaSupervisor from '@/pages/member/AreaSupervisor'
 
 /**
  * ProtectedRoute - redirects to login if not authenticated
@@ -81,6 +82,23 @@ function LeaderRoute({ children }: { children: React.ReactNode }) {
   return <MemberLayout>{children}</MemberLayout>
 }
 
+/**
+ * SupervisorRoute - só supervisor de rede (e admin) acessam a visão da rede.
+ */
+function SupervisorRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isSupervisor } = useAuth()
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
+
+  if (!isSupervisor) {
+    return <Navigate to="/dashboard" replace />
+  }
+
+  return <MemberLayout>{children}</MemberLayout>
+}
+
 export default function App() {
   return (
     <Routes>
@@ -119,6 +137,9 @@ export default function App() {
 
       {/* Leader routes - only leaders and admins */}
       <Route path="/area-lider" element={<LeaderRoute><AreaLider /></LeaderRoute>} />
+
+      {/* Supervisão de rede - supervisores e admins */}
+      <Route path="/supervisao" element={<SupervisorRoute><AreaSupervisor /></SupervisorRoute>} />
 
       {/* Admin routes - only admins */}
       <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
