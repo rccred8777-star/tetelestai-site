@@ -33,6 +33,7 @@ const leaderNav = [
 // Navigation items for admins (visible only to admin)
 const adminNav = [
   { label: 'Painel Admin', href: '/admin', icon: Shield },
+  { label: 'Gerenciar Celulas', href: '/admin/celulas', icon: Church },
   { label: 'Gerenciar Cursos', href: '/admin/cursos', icon: GraduationCap },
   { label: 'Gerenciar Alunos', href: '/admin/alunos', icon: Users },
   { label: 'Gerenciar Comunicados', href: '/admin/comunicados', icon: Megaphone },
