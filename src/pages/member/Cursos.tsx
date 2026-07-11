@@ -11,6 +11,7 @@ import { Progress } from '@/components/ui/progress'
 import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
 import { listCourses, listLessons, type Course, type Lesson } from '@/services/coursesDb'
+import { listStudentCourseIds } from '@/services/enrollmentsDb'
 import { getUserProgress, markLessonComplete } from '@/services/firestore'
 
 // Renderizador simples de Markdown (títulos, negrito, listas) — sem libs extras.
@@ -33,7 +34,7 @@ function renderMarkdown(md: string) {
 }
 
 export default function Cursos() {
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const [courses, setCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(true)
   const [completed, setCompleted] = useState<string[]>([])
@@ -46,10 +47,22 @@ export default function Cursos() {
   useEffect(() => {
     (async () => {
       try {
-        setCourses(await listCourses())
+        const all = await listCourses()
+
         if (user) {
+          // Admin enxerga todos os cursos. O membro ve apenas
+          // aqueles em que foi matriculado.
+          if (isAdmin) {
+            setCourses(all)
+          } else {
+            const myIds = await listStudentCourseIds(user.uid)
+            setCourses(all.filter((c) => myIds.includes(c.id)))
+          }
+
           const p = await getUserProgress(user.uid)
           setCompleted(p.completedLessons || [])
+        } else {
+          setCourses([])
         }
       } catch (e) {
         console.error(e)
@@ -57,7 +70,7 @@ export default function Cursos() {
         setLoading(false)
       }
     })()
-  }, [user])
+  }, [user, isAdmin])
 
   const openCourse = async (c: Course) => {
     setCourse(c); setLesson(null); setLoadingLessons(true)
@@ -226,7 +239,10 @@ export default function Cursos() {
         <Card className="border-0 shadow-sm">
           <CardContent className="py-14 text-center">
             <BookOpen className="mx-auto mb-3 h-10 w-10 text-gray-300" />
-            <p className="text-sm text-[#4A5568]">Nenhum curso publicado ainda.</p>
+            <p className="text-sm text-[#4A5568]">Você ainda não está matriculado em nenhum curso.</p>
+            <p className="mt-1 text-xs text-[#718096]">
+              Fale com a liderança da igreja para ser incluído em uma turma.
+            </p>
           </CardContent>
         </Card>
       ) : (

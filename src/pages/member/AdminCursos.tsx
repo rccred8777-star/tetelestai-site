@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import {
   GraduationCap, Plus, Pencil, Trash2, BookOpen, FileText, ChevronLeft,
   ArrowUp, ArrowDown, DownloadCloud, Loader2, ExternalLink, Link as LinkIcon,
+  Users, Search,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -20,6 +21,8 @@ import {
   migrateSeedCourses,
   type Course, type Lesson, type Material,
 } from '@/services/coursesDb'
+import { listStudents, type Student } from '@/services/studentsDb'
+import { listCourseStudentIds, saveCourseRoster } from '@/services/enrollmentsDb'
 
 // -------------------- Editor de Apostilas (materiais/links) -----------------
 function MaterialsEditor({ value, onChange }: { value: Material[]; onChange: (m: Material[]) => void }) {
@@ -283,11 +286,146 @@ function LessonDialog({ open, onOpenChange, courseId, lesson, onSaved }: {
   )
 }
 
+// ----------------------- Turma do curso (matrículas) ------------------------
+function RosterDialog({ open, onOpenChange, course }: {
+  open: boolean; onOpenChange: (v: boolean) => void; course: Course | null
+}) {
+  const [students, setStudents] = useState<Student[]>([])
+  const [selected, setSelected] = useState<string[]>([])
+  const [initial, setInitial] = useState<string[]>([])
+  const [search, setSearch] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!open || !course) return
+    setLoading(true)
+    setSearch('')
+    Promise.all([listStudents(), listCourseStudentIds(course.id)])
+      .then(([all, enrolled]) => {
+        setStudents(all)
+        setSelected(enrolled)
+        setInitial(enrolled)
+      })
+      .catch((e) => { toast.error('Erro ao carregar a turma'); console.error(e) })
+      .finally(() => setLoading(false))
+  }, [open, course])
+
+  const toggle = (id: string) => {
+    setSelected((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
+  }
+
+  const filtered = students.filter((s) => {
+    const t = `${s.displayName || ''} ${s.email || ''}`.toLowerCase()
+    return t.includes(search.toLowerCase())
+  })
+
+  const save = async () => {
+    if (!course) return
+    setSaving(true)
+    try {
+      const { added, removed } = await saveCourseRoster(course.id, selected, initial)
+      if (added === 0 && removed === 0) toast.info('Nenhuma alteração na turma')
+      else toast.success(`Turma atualizada: ${added} matriculado(s), ${removed} removido(s)`)
+      onOpenChange(false)
+    } catch (e) {
+      toast.error('Erro ao salvar a turma')
+      console.error(e)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Turma — {course?.title}</DialogTitle>
+          <DialogDescription>
+            Marque quem pode acessar este curso. Quem não estiver marcado não vê o curso.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 py-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#718096]" />
+            <Input
+              placeholder="Buscar por nome ou e-mail"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+
+          <div className="flex items-center justify-between text-xs text-[#718096]">
+            <span>{selected.length} de {students.length} matriculado(s)</span>
+            <div className="flex gap-3">
+              <button type="button" className="hover:underline" onClick={() => setSelected(students.map((s) => s.id))}>
+                Marcar todos
+              </button>
+              <button type="button" className="hover:underline" onClick={() => setSelected([])}>
+                Limpar
+              </button>
+            </div>
+          </div>
+
+          <div className="max-h-[320px] overflow-y-auto rounded-lg border border-gray-100">
+            {loading ? (
+              <div className="flex items-center justify-center py-10 text-[#718096]">
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Carregando...
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="py-10 text-center text-sm text-[#718096]">Nenhum membro encontrado.</div>
+            ) : (
+              filtered.map((s) => {
+                const on = selected.includes(s.id)
+                return (
+                  <label
+                    key={s.id}
+                    className="flex cursor-pointer items-center gap-3 border-b border-gray-50 px-3 py-2.5 last:border-0 hover:bg-[#F7FAFC]"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={() => toggle(s.id)}
+                      className="h-4 w-4 rounded border-gray-300"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-[#1A202C]">
+                        {s.displayName || '(sem nome)'}
+                      </p>
+                      <p className="truncate text-[11px] text-[#718096]">{s.email}</p>
+                    </div>
+                    {s.role !== 'member' && (
+                      <Badge variant="outline" className="text-[10px]">
+                        {s.role === 'admin' ? 'Admin' : 'Líder'}
+                      </Badge>
+                    )}
+                  </label>
+                )
+              })
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button onClick={save} disabled={saving || loading} className="bg-[#1A365D] hover:bg-[#1A365D]/90">
+            {saving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} Salvar turma
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // --------------------------------- Página -----------------------------------
 export default function AdminCursos() {
   const [courses, setCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(true)
   const [migrating, setMigrating] = useState(false)
+  const [rosterDialog, setRosterDialog] = useState(false)
+  const [rosterCourse, setRosterCourse] = useState<Course | null>(null)
 
   const [selected, setSelected] = useState<Course | null>(null)
   const [lessons, setLessons] = useState<Lesson[]>([])
@@ -431,14 +569,18 @@ export default function AdminCursos() {
                         <p className="mt-0.5 line-clamp-2 text-xs text-[#718096]">{c.description}</p>
                       </button>
                       <div className="flex shrink-0 gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditingCourse(c); setCourseDialog(true) }}><Pencil className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => removeCourse(c)}><Trash2 className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Gerenciar turma" onClick={() => { setRosterCourse(c); setRosterDialog(true) }}><Users className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar curso" onClick={() => { setEditingCourse(c); setCourseDialog(true) }}><Pencil className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" title="Excluir curso" onClick={() => removeCourse(c)}><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     </div>
-                    <div className="mt-3 flex items-center gap-2">
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
                       {c.category && <Badge variant="outline" className="text-[10px]">{c.category}</Badge>}
                       <Badge variant="outline" className="text-[10px]"><BookOpen className="mr-1 h-3 w-3" />{c.lessonCount ?? 0} aulas</Badge>
                       {(c.materials?.length ?? 0) > 0 && <Badge variant="outline" className="text-[10px]"><FileText className="mr-1 h-3 w-3" />{c.materials!.length} apostila(s)</Badge>}
+                    </div>
+                    <div className="mt-2 flex items-center gap-3">
+                      <Button variant="link" size="sm" className="h-7 px-0 text-[#1A365D]" onClick={() => { setRosterCourse(c); setRosterDialog(true) }}>Turma</Button>
                       <Button variant="link" size="sm" className="ml-auto h-7 px-0 text-[#1A365D]" onClick={() => openCourse(c)}>Gerenciar aulas →</Button>
                     </div>
                   </div>
@@ -507,6 +649,7 @@ export default function AdminCursos() {
       )}
 
       <CourseDialog open={courseDialog} onOpenChange={setCourseDialog} course={editingCourse} onSaved={reloadCourses} />
+      <RosterDialog open={rosterDialog} onOpenChange={setRosterDialog} course={rosterCourse} />
       {selected && (
         <LessonDialog open={lessonDialog} onOpenChange={setLessonDialog} courseId={selected.id} lesson={editingLesson}
           onSaved={() => { reloadLessons(selected.id); reloadCourses() }} />
