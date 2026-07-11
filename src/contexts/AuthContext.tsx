@@ -12,7 +12,7 @@ import {
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db, googleProvider, isConfigured } from '@/lib/firebase';
 
-export type UserRole = 'member' | 'leader' | 'admin';
+export type UserRole = 'member' | 'leader' | 'supervisor' | 'admin';
 
 export interface UserProfile {
   uid: string;
@@ -33,6 +33,7 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   isLeader: boolean;
+  isSupervisor: boolean;
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
@@ -101,7 +102,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   // RBAC helpers
-  const isLeader = profile?.role === 'leader' || profile?.role === 'admin';
+  // Supervisor e admin também acessam a Área do Líder.
+  const isLeader =
+    profile?.role === 'leader' ||
+    profile?.role === 'supervisor' ||
+    profile?.role === 'admin';
+  const isSupervisor = profile?.role === 'supervisor' || profile?.role === 'admin';
   const isAdmin = profile?.role === 'admin';
 
   // Initialize mock mode on mount
@@ -252,6 +258,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading,
     isAuthenticated: !!user,
     isLeader,
+    isSupervisor,
     isAdmin,
     login,
     register,
