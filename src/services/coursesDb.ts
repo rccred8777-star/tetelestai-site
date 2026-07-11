@@ -142,7 +142,7 @@ export async function swapLessonOrder(courseId: string, a: Lesson, b: Lesson): P
 // Importa os 3 cursos já escritos (Método 3/3, Escola de Líderes, Escola de
 // Missões) do arquivo mock para o banco. É idempotente: cursos já existentes
 // não são duplicados.
-const SEED_COURSES: { id: string; title: string; description: string; category: string; order: number; color: string; lessons: any[] }[] = [
+const SEED_COURSES: { id: string; title: string; description: string; category: string; order: number; color: string; lessons: any[]; materials?: Material[] }[] = [
   {
     id: 'metodo-33',
     title: 'Método 3/3 — Discipulado Multiplicativo',
@@ -178,6 +178,9 @@ const SEED_COURSES: { id: string; title: string; description: string; category: 
     order: 4,
     color: '#0E7490',
     lessons: batismoLessons as any[],
+    materials: [
+      { title: 'Apostila do Aluno — Curso de Batismo (PDF)', url: '/Apostila-Curso-de-Batismo.pdf' },
+    ],
   },
 ]
 
@@ -204,7 +207,7 @@ export async function migrateSeedCourses(): Promise<MigrationReport> {
       category: seed.category,
       coverColor: seed.color,
       order: seed.order,
-      materials: [],
+      materials: seed.materials || [],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     })
