@@ -11,6 +11,7 @@ import {
   query, orderBy, serverTimestamp,
 } from 'firebase/firestore'
 import { metodo33Lessons, lideresLessons, missoesLessons } from '@/data/mock'
+import { batismoLessons } from '@/data/batismo'
 
 // ----------------------------- Tipos ---------------------------------------
 export interface Material {
@@ -168,6 +169,15 @@ const SEED_COURSES: { id: string; title: string; description: string; category: 
     order: 3,
     color: '#166534',
     lessons: missoesLessons as any[],
+  },
+  {
+    id: 'batismo-aguas',
+    title: 'Curso de Batismo nas Águas',
+    description: 'Preparação para o batismo em 4 encontros: salvação, o significado do batismo, o batismo no Espírito Santo e a vida de discípulo.',
+    category: 'Batismo',
+    order: 4,
+    color: '#0E7490',
+    lessons: batismoLessons as any[],
   },
 ]
 
