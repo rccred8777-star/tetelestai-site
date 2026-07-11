@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 220 17% 14%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 17% 14%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 17% 14%;
+    --primary: 213 55% 23%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 42 60% 55%;
+    --secondary-foreground: 213 55% 23%;
+    --muted: 210 20% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 14 78% 54%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 213 55% 23%;
+    --radius: 0.5rem;
+    --sidebar-background: 213 55% 15%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 42 60% 55%;
+    --sidebar-primary-foreground: 213 55% 23%;
+    --sidebar-accent: 213 55% 20%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 213 55% 25%;
+    --sidebar-ring: 42 60% 55%;
+    --giving: 145 55% 44%;
+    --font-heading: 'Playfair Display', Georgia, serif;
+    --font-body: 'Inter', sans-serif;
+    --font-serif: 'Merriweather', Georgia, serif;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+  }
+}
+
+@layer utilities {
+  .font-heading {
+    font-family: var(--font-heading);
+  }
+  .font-body {
+    font-family: var(--font-body);
+  }
+  .font-serif {
+    font-family: var(--font-serif);
+  }
+}
