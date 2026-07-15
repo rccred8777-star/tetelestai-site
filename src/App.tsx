@@ -19,16 +19,11 @@ import Login from '@/pages/member/Login'
 import Dashboard from '@/pages/member/Dashboard'
 import Perfil from '@/pages/member/Perfil'
 import MinhasCelulas from '@/pages/member/MinhasCelulas'
-import MeusCursos from '@/pages/member/MeusCursos'
 import MeusEventos from '@/pages/member/MeusEventos'
 import MidiaMembro from '@/pages/member/MidiaMembro'
 import Comunicados from '@/pages/member/Comunicados'
 import MinhasDoacoes from '@/pages/member/MinhasDoacoes'
 import Admin from '@/pages/member/Admin'
-import CursoMetodo33 from '@/pages/member/CursoMetodo33'
-import DashboardMetodo33 from '@/pages/member/DashboardMetodo33'
-import CursoLideres from '@/pages/member/CursoLideres'
-import CursoMissoes from '@/pages/member/CursoMissoes'
 import AreaLider from '@/pages/member/AreaLider'
 import Cursos from '@/pages/member/Cursos'
 import AdminCursos from '@/pages/member/AdminCursos'
@@ -128,14 +123,10 @@ export default function App() {
       <Route path="/midia-membro" element={<ProtectedRoute><MidiaMembro /></ProtectedRoute>} />
       <Route path="/comunicados" element={<ProtectedRoute><Comunicados /></ProtectedRoute>} />
       <Route path="/minhas-doacoes" element={<ProtectedRoute><MinhasDoacoes /></ProtectedRoute>} />
-      <Route path="/member/curso-metodo-33" element={<ProtectedRoute><CursoMetodo33 /></ProtectedRoute>} />
-      <Route path="/member/dashboard-metodo-33" element={<ProtectedRoute><DashboardMetodo33 /></ProtectedRoute>} />
 
       {/* Courses - any authenticated user */}
       <Route path="/cursos" element={<ProtectedRoute><Cursos /></ProtectedRoute>} />
       <Route path="/certificado/:courseId" element={<ProtectedRoute><Certificado /></ProtectedRoute>} />
-      <Route path="/curso-lideres" element={<ProtectedRoute><CursoLideres /></ProtectedRoute>} />
-      <Route path="/curso-missoes" element={<ProtectedRoute><CursoMissoes /></ProtectedRoute>} />
 
       {/* Leader routes - only leaders and admins */}
       <Route path="/area-lider" element={<LeaderRoute><AreaLider /></LeaderRoute>} />
