@@ -18,7 +18,6 @@ const memberNav = [
   { label: 'Minhas Celulas', href: '/minhas-celulas', icon: Users },
   { label: 'Cursos e Materiais', href: '/cursos', icon: GraduationCap },
   { label: 'Meus Eventos', href: '/meus-eventos', icon: Calendar },
-  { label: 'Midia', href: '/midia-membro', icon: PlayCircle },
   { label: 'Comunicados', href: '/comunicados', icon: Bell },
   { label: 'Minhas Doacoes', href: '/minhas-doacoes', icon: Heart },
 ]
