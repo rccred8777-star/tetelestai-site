@@ -118,7 +118,6 @@ export default function App() {
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/perfil" element={<ProtectedRoute><Perfil /></ProtectedRoute>} />
       <Route path="/minhas-celulas" element={<ProtectedRoute><MinhasCelulas /></ProtectedRoute>} />
-      <Route path="/meus-cursos" element={<ProtectedRoute><MeusCursos /></ProtectedRoute>} />
       <Route path="/meus-eventos" element={<ProtectedRoute><MeusEventos /></ProtectedRoute>} />
       <Route path="/midia-membro" element={<ProtectedRoute><MidiaMembro /></ProtectedRoute>} />
       <Route path="/comunicados" element={<ProtectedRoute><Comunicados /></ProtectedRoute>} />
