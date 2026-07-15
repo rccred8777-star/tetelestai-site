@@ -19,7 +19,7 @@ import {
   listCourses, createCourse, updateCourse, deleteCourse,
   listLessons, createLesson, updateLesson, deleteLesson, swapLessonOrder,
   migrateSeedCourses,
-  type Course, type Lesson, type Material,
+  type Course, type Lesson, type Material, type QuizQuestion,
 } from '@/services/coursesDb'
 import { listStudents, type Student } from '@/services/studentsDb'
 import {
@@ -159,6 +159,58 @@ function CourseDialog({ open, onOpenChange, course, onSaved }: {
   )
 }
 
+// --------------------------- Editor de Prova (quiz) -------------------------
+function QuizEditor({ value, onChange }: { value: QuizQuestion[]; onChange: (q: QuizQuestion[]) => void }) {
+  const addQ = () => onChange([...value, { question: '', options: ['', ''], correctIndex: 0 }])
+  const setQ = (i: number, patch: Partial<QuizQuestion>) =>
+    onChange(value.map((q, k) => (k === i ? { ...q, ...patch } : q)))
+  const delQ = (i: number) => onChange(value.filter((_, k) => k !== i))
+  const setOpt = (qi: number, oi: number, text: string) =>
+    setQ(qi, { options: value[qi].options.map((o, k) => (k === oi ? text : o)) })
+  const addOpt = (qi: number) => setQ(qi, { options: [...value[qi].options, ''] })
+  const delOpt = (qi: number, oi: number) => {
+    const q = value[qi]
+    if (q.options.length <= 2) { toast.error('Cada pergunta precisa de pelo menos 2 alternativas'); return }
+    const options = q.options.filter((_, k) => k !== oi)
+    const correctIndex = q.correctIndex >= oi && q.correctIndex > 0 ? q.correctIndex - 1 : q.correctIndex
+    setQ(qi, { options, correctIndex })
+  }
+
+  return (
+    <div className="space-y-3">
+      {value.map((q, qi) => (
+        <div key={qi} className="rounded-lg border border-gray-200 p-3">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="text-xs font-semibold text-[#718096]">Pergunta {qi + 1}</span>
+            <Button type="button" variant="ghost" size="icon" className="ml-auto h-7 w-7 text-red-500" onClick={() => delQ(qi)}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+          <Input value={q.question} onChange={(e) => setQ(qi, { question: e.target.value })} placeholder="Enunciado da pergunta" className="mb-2" />
+          <p className="mb-1 text-[11px] text-[#718096]">Marque o círculo da alternativa correta:</p>
+          <div className="space-y-1.5">
+            {q.options.map((op, oi) => (
+              <div key={oi} className="flex items-center gap-2">
+                <input type="radio" checked={q.correctIndex === oi} onChange={() => setQ(qi, { correctIndex: oi })} className="h-4 w-4" />
+                <Input value={op} onChange={(e) => setOpt(qi, oi, e.target.value)} placeholder={`Alternativa ${oi + 1}`} className="h-8 text-sm" />
+                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-[#718096]" onClick={() => delOpt(qi, oi)}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+          <Button type="button" variant="link" size="sm" className="mt-1 h-6 px-0 text-xs text-[#1A365D]" onClick={() => addOpt(qi)}>
+            + alternativa
+          </Button>
+        </div>
+      ))}
+      <Button type="button" variant="outline" className="gap-1" onClick={addQ}>
+        <Plus className="h-4 w-4" /> Adicionar pergunta
+      </Button>
+    </div>
+  )
+}
+
 // ------------------------------ Dialog de Aula ------------------------------
 function LessonDialog({ open, onOpenChange, courseId, lesson, onSaved }: {
   open: boolean; onOpenChange: (v: boolean) => void; courseId: string; lesson: Lesson | null; onSaved: () => void
@@ -174,6 +226,7 @@ function LessonDialog({ open, onOpenChange, courseId, lesson, onSaved }: {
   const [homework, setHomework] = useState('')
   const [memoryVerse, setMemoryVerse] = useState('')
   const [materials, setMaterials] = useState<Material[]>([])
+  const [quiz, setQuiz] = useState<QuizQuestion[]>([])
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -189,16 +242,21 @@ function LessonDialog({ open, onOpenChange, courseId, lesson, onSaved }: {
       setHomework(lesson?.homework || '')
       setMemoryVerse(lesson?.memoryVerse || '')
       setMaterials(lesson?.materials || [])
+      setQuiz(lesson?.quiz || [])
     }
   }, [open, lesson])
 
   const save = async () => {
     if (!title.trim()) { toast.error('Dê um título à aula'); return }
+    // valida o quiz: enunciado e alternativas preenchidas
+    const quizLimpo = quiz
+      .filter((q) => q.question.trim() && q.options.filter((o) => o.trim()).length >= 2)
+      .map((q) => ({ ...q, options: q.options.map((o) => o.trim()).filter(Boolean) }))
     setSaving(true)
     const data: Partial<Lesson> = {
       title, order, verse, verseText, videoUrl, content,
       discussionQuestions: questions.split('\n').map((q) => q.trim()).filter(Boolean),
-      practicalActivity, homework, memoryVerse, materials,
+      practicalActivity, homework, memoryVerse, materials, quiz: quizLimpo,
     }
     try {
       if (lesson) {
@@ -275,6 +333,13 @@ function LessonDialog({ open, onOpenChange, courseId, lesson, onSaved }: {
           <div className="space-y-1.5">
             <Label>Apostilas desta aula</Label>
             <MaterialsEditor value={materials} onChange={setMaterials} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Prova da aula (opcional)</Label>
+            <p className="text-[11px] text-[#718096]">
+              Se houver perguntas, o aluno precisa acertar {70}% para concluir a aula. Sem perguntas, ele conclui manualmente.
+            </p>
+            <QuizEditor value={quiz} onChange={setQuiz} />
           </div>
         </div>
         <DialogFooter>

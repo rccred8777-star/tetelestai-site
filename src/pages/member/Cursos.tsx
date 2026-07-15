@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   BookOpen, FileText, ChevronLeft, ExternalLink, Loader2, CheckCircle,
-  PlayCircle, GraduationCap, Lock, Clock, UserPlus,
+  PlayCircle, GraduationCap, Lock, Clock, UserPlus, Award, XCircle, RotateCcw,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -15,7 +16,96 @@ import {
   listStudentEnrollments, requestEnrollment, cancelRequest,
   type EnrollmentStatus,
 } from '@/services/enrollmentsDb'
-import { getUserProgress, markLessonComplete } from '@/services/firestore'
+import { getUserProgress, markLessonComplete, recordQuizResult, QUIZ_PASS_PCT } from '@/services/firestore'
+
+// ============================ Prova / Quiz ============================
+function LessonQuiz({ lesson, onPass }: { lesson: Lesson; onPass: (score: number) => void }) {
+  const quiz = lesson.quiz || []
+  const [answers, setAnswers] = useState<Record<number, number>>({})
+  const [result, setResult] = useState<{ score: number; passed: boolean } | null>(null)
+
+  const responder = (qi: number, oi: number) => {
+    if (result) return
+    setAnswers((a) => ({ ...a, [qi]: oi }))
+  }
+
+  const corrigir = () => {
+    if (Object.keys(answers).length < quiz.length) {
+      toast.error('Responda todas as perguntas antes de corrigir.')
+      return
+    }
+    const acertos = quiz.filter((q, i) => answers[i] === q.correctIndex).length
+    const score = Math.round((acertos / quiz.length) * 100)
+    const passed = score >= QUIZ_PASS_PCT
+    setResult({ score, passed })
+    if (passed) onPass(score)
+  }
+
+  const refazer = () => { setAnswers({}); setResult(null) }
+
+  return (
+    <div className="rounded-lg border border-[#1A365D]/15 bg-white p-4">
+      <p className="mb-1 flex items-center gap-1.5 font-semibold text-[#1A365D]">
+        <Award className="h-4 w-4" /> Prova da lição
+      </p>
+      <p className="mb-4 text-xs text-[#718096]">
+        {quiz.length} pergunta(s). Você precisa de {QUIZ_PASS_PCT}% para concluir a lição.
+      </p>
+
+      <div className="space-y-4">
+        {quiz.map((q, qi) => (
+          <div key={qi}>
+            <p className="mb-2 text-sm font-medium text-[#1A202C]">{qi + 1}. {q.question}</p>
+            <div className="space-y-1.5">
+              {q.options.map((op, oi) => {
+                const escolhida = answers[qi] === oi
+                const correta = result && oi === q.correctIndex
+                const erradaEscolhida = result && escolhida && oi !== q.correctIndex
+                return (
+                  <button
+                    key={oi}
+                    onClick={() => responder(qi, oi)}
+                    disabled={!!result}
+                    className={`flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+                      correta ? 'border-[#38A169] bg-[#38A169]/10 text-[#276749]'
+                      : erradaEscolhida ? 'border-red-300 bg-red-50 text-red-700'
+                      : escolhida ? 'border-[#1A365D] bg-[#1A365D]/5'
+                      : 'border-gray-200 hover:bg-[#F7FAFC]'}`}
+                  >
+                    <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${escolhida || correta ? 'border-current' : 'border-gray-300'}`}>
+                      {correta && <CheckCircle className="h-4 w-4" />}
+                      {erradaEscolhida && <XCircle className="h-4 w-4" />}
+                    </span>
+                    {op}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {result ? (
+        <div className="mt-4 space-y-3">
+          <div className={`rounded-lg px-4 py-3 text-sm font-medium ${result.passed ? 'bg-[#38A169]/10 text-[#276749]' : 'bg-red-50 text-red-700'}`}>
+            {result.passed
+              ? `Aprovado! Você acertou ${result.score}%. Lição concluída.`
+              : `Você fez ${result.score}%. Precisa de ${QUIZ_PASS_PCT}%. Reveja o conteúdo e tente de novo.`}
+          </div>
+          {!result.passed && (
+            <Button variant="outline" onClick={refazer} className="gap-1">
+              <RotateCcw className="h-4 w-4" /> Refazer a prova
+            </Button>
+          )}
+        </div>
+      ) : (
+        <Button onClick={corrigir} className="mt-4 bg-[#1A365D] hover:bg-[#1A365D]/90">
+          Corrigir prova
+        </Button>
+      )}
+    </div>
+  )
+}
 
 // Renderizador simples de Markdown (títulos, negrito, listas) — sem libs extras.
 function renderMarkdown(md: string) {
@@ -129,6 +219,23 @@ export default function Cursos() {
     }
   }
 
+  // Chamado quando o aluno é APROVADO na prova da lição.
+  const onQuizPass = async (l: Lesson, score: number) => {
+    if (!user || !course) return
+    try {
+      await recordQuizResult(user.uid, course.id, l.id, score, true)
+      setCompleted((prev) => (prev.includes(l.id) ? prev : [...prev, l.id]))
+      toast.success('Prova aprovada! Lição concluída.')
+    } catch (e) {
+      toast.error('Erro ao salvar o resultado da prova')
+      console.error(e)
+    }
+  }
+
+  // Todas as lições concluídas? (libera o certificado)
+  const cursoConcluido = (ls: Lesson[]) =>
+    ls.length > 0 && ls.every((l) => completed.includes(l.id))
+
   const courseProgress = (c: Course, ls?: Lesson[]) => {
     const total = ls ? ls.length : (c.lessonCount ?? 0)
     if (!total) return 0
@@ -196,9 +303,19 @@ export default function Cursos() {
                 </div>
               )}
 
-              <Button onClick={() => complete(lesson)} disabled={isDone} className={isDone ? 'bg-[#38A169] hover:bg-[#38A169]' : 'bg-[#1A365D] hover:bg-[#1A365D]/90'}>
-                <CheckCircle className="mr-1 h-4 w-4" /> {isDone ? 'Aula concluída' : 'Marcar como concluída'}
-              </Button>
+              {(lesson.quiz?.length ?? 0) > 0 ? (
+                isDone ? (
+                  <div className="flex items-center gap-2 rounded-lg bg-[#38A169]/10 px-4 py-3 text-sm font-medium text-[#276749]">
+                    <CheckCircle className="h-4 w-4" /> Você já foi aprovado nesta lição.
+                  </div>
+                ) : (
+                  <LessonQuiz lesson={lesson} onPass={(score) => onQuizPass(lesson, score)} />
+                )
+              ) : (
+                <Button onClick={() => complete(lesson)} disabled={isDone} className={isDone ? 'bg-[#38A169] hover:bg-[#38A169]' : 'bg-[#1A365D] hover:bg-[#1A365D]/90'}>
+                  <CheckCircle className="mr-1 h-4 w-4" /> {isDone ? 'Aula concluída' : 'Marcar como concluída'}
+                </Button>
+              )}
             </CardContent>
           </Card>
         </motion.div>
@@ -258,6 +375,17 @@ export default function Cursos() {
                 )
               })}
             </div>
+
+            {!loadingLessons && cursoConcluido(lessons) && (
+              <div className="mt-6 rounded-lg border border-[#D4A843] bg-[#FFFCF3] p-4 text-center">
+                <Award className="mx-auto mb-2 h-8 w-8 text-[#B8860B]" />
+                <p className="font-semibold text-[#1A202C]">Parabéns! Você concluiu o curso.</p>
+                <p className="mb-3 text-xs text-[#718096]">Emita seu certificado de conclusão.</p>
+                <Button asChild className="gap-1 bg-[#1A365D] hover:bg-[#1A365D]/90">
+                  <Link to={`/certificado/${course.id}`}><Award className="h-4 w-4" /> Emitir certificado</Link>
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
