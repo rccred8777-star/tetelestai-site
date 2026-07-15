@@ -227,6 +227,11 @@ export async function requestToJoin(cellId: string, userId: string): Promise<voi
   })
 }
 
+/** O membro cancela o próprio pedido pendente. */
+export async function cancelRequestToJoin(cellId: string, userId: string): Promise<void> {
+  await deleteDoc(doc(db, 'cellMemberships', membershipId(cellId, userId)))
+}
+
 /** O líder aprova o pedido. */
 export async function approveMember(cellId: string, userId: string): Promise<void> {
   await updateDoc(doc(db, 'cellMemberships', membershipId(cellId, userId)), {
