@@ -37,6 +37,7 @@ import AdminComunicados from '@/pages/member/AdminComunicados'
 import AdminEventos from '@/pages/member/AdminEventos'
 import AdminCelulas from '@/pages/member/AdminCelulas'
 import AreaSupervisor from '@/pages/member/AreaSupervisor'
+import Certificado from '@/pages/member/Certificado'
 
 /**
  * ProtectedRoute - redirects to login if not authenticated
@@ -132,6 +133,7 @@ export default function App() {
 
       {/* Courses - any authenticated user */}
       <Route path="/cursos" element={<ProtectedRoute><Cursos /></ProtectedRoute>} />
+      <Route path="/certificado/:courseId" element={<ProtectedRoute><Certificado /></ProtectedRoute>} />
       <Route path="/curso-lideres" element={<ProtectedRoute><CursoLideres /></ProtectedRoute>} />
       <Route path="/curso-missoes" element={<ProtectedRoute><CursoMissoes /></ProtectedRoute>} />
 
