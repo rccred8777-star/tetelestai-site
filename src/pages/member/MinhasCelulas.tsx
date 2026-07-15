@@ -1,132 +1,166 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Users, MapPin, Calendar, Phone, Check, MessageSquare, FileText, Send } from 'lucide-react'
+import {
+  Users, MapPin, Clock, Loader2, UserPlus, CheckCircle, Church, Search,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { cellMembers } from '@/data/mock'
-
-const fadeInUp = { hidden: { opacity: 0, y: 30 }, visible: (i: number) => ({ opacity: 1, y: 0, transition: { delay: i * 0.1, duration: 0.5 } }) }
-
-const cellMessages = [
-  { from: 'Pb. João', text: 'Lembrete: Amanhã trazer o estudo da semana 3.', time: '2h ago' },
-  { from: 'Dc. Maria', text: 'Oremos pelo irmão Roberto que está no hospital.', time: '1d ago' },
-  { from: 'Pb. João', text: 'Próximo sábado teremos churrasco de integração!', time: '3d ago' },
-]
+import { toast } from 'sonner'
+import { useAuth } from '@/hooks/useAuth'
+import {
+  listCells, listMyMemberships, requestToJoin, cancelRequestToJoin,
+  type Cell, type MembershipStatus,
+} from '@/services/cellsDb'
 
 export default function MinhasCelulas() {
-  const [confirmed, setConfirmed] = useState(false)
-  const [messageText, setMessageText] = useState('')
-  const [messages, setMessages] = useState(cellMessages)
+  const { user } = useAuth()
+  const [cells, setCells] = useState<Cell[]>([])
+  const [status, setStatus] = useState<Record<string, MembershipStatus>>({})
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
 
-  const handleSend = () => {
-    if (!messageText.trim()) return
-    setMessages([{ from: 'Você', text: messageText, time: 'agora' }, ...messages])
-    setMessageText('')
+  const carregar = async () => {
+    if (!user) return
+    setLoading(true)
+    try {
+      const [todas, minhas] = await Promise.all([listCells(), listMyMemberships(user.uid)])
+      setCells(todas)
+      const map: Record<string, MembershipStatus> = {}
+      minhas.forEach((m) => { map[m.cellId] = m.status })
+      setStatus(map)
+    } catch (e) { toast.error('Erro ao carregar as células'); console.error(e) }
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => { carregar() }, [user])
+
+  const minhas = cells.filter((c) => status[c.id])
+  const disponiveis = cells.filter((c) => !status[c.id]).filter((c) => {
+    const t = `${c.name} ${c.region || ''} ${c.profile || ''}`.toLowerCase()
+    return t.includes(search.toLowerCase())
+  })
+
+  const pedir = async (c: Cell) => {
+    if (!user) return
+    setBusy(c.id)
+    try { await requestToJoin(c.id, user.uid); await carregar(); toast.success('Pedido enviado ao líder da célula.') }
+    catch (e) { toast.error('Não foi possível enviar o pedido.'); console.error(e) }
+    finally { setBusy(null) }
+  }
+  const cancelar = async (c: Cell) => {
+    if (!user) return
+    setBusy(c.id)
+    try { await cancelRequestToJoin(c.id, user.uid); await carregar(); toast.info('Pedido cancelado.') }
+    catch (e) { toast.error('Não foi possível cancelar.'); console.error(e) }
+    finally { setBusy(null) }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24 text-[#718096]">
+        <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Carregando...
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <div className="flex items-center gap-2 text-sm text-[#718096] mb-2"><span>Dashboard</span><span>/</span><span>Minhas Células</span></div>
-        <div className="flex items-center gap-3">
-          <h1 className="font-heading text-2xl font-bold text-[#1A202C]">Célula Vida Nova</h1>
-          <Badge className="bg-[#1A365D] text-white hover:bg-[#1A365D]">Família</Badge>
-        </div>
-        <p className="text-sm text-[#718096] mt-1">Membro desde Janeiro 2024</p>
+        <h1 className="font-heading text-2xl font-bold text-[#1A202C]">Minhas Células</h1>
+        <p className="text-sm text-[#718096]">A célula em que você participa e as células disponíveis para entrar.</p>
       </motion.div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <motion.div custom={0} variants={fadeInUp} initial="hidden" animate="visible">
-            <Card className="border-0 shadow-md">
-              <CardContent className="p-6">
-                <div className="grid sm:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="w-14 h-14 border-2 border-[#D4A843]"><AvatarFallback className="bg-[#1A365D] text-white">Pb</AvatarFallback></Avatar>
-                      <div><p className="font-medium text-[#1A202C]">Pb. João Pereira</p><Badge variant="outline" className="text-[10px]">Líder</Badge></div>
-                    </div>
-                    <div className="space-y-2 text-sm text-[#4A5568]">
-                      <div className="flex items-center gap-2"><Calendar className="w-4 h-4 text-[#1A365D]" />Toda terça-feira, 20h</div>
-                      <div className="flex items-center gap-2"><MapPin className="w-4 h-4 text-[#1A365D]" />Rua das Flores, 45 — Centro</div>
-                    </div>
-                  </div>
-                  <div className="bg-[#F7FAFC] rounded-xl p-4">
-                    <h3 className="font-medium text-[#1A202C] mb-2">Próximo Encontro</h3>
-                    <p className="text-sm text-[#4A5568] mb-1">14 de Janeiro de 2026</p>
-                    <p className="text-sm text-[#4A5568] mb-1">20h00</p>
-                    <p className="text-sm text-[#1A365D] font-medium mb-3">Estudo: O Fruto do Espírito</p>
-                    <p className="text-xs text-[#718096] mb-3">Casa do irmão Pedro</p>
-                    <Button size="sm" className={confirmed ? 'bg-[#38A169] hover:bg-[#38A169]' : 'bg-[#1A365D] hover:bg-[#2C5282]'} onClick={() => setConfirmed(!confirmed)}>
-                      {confirmed ? <><Check className="w-4 h-4 mr-1" />Confirmado</> : 'Confirmar presença'}
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div custom={1} variants={fadeInUp} initial="hidden" animate="visible">
-            <Card className="border-0 shadow-md">
-              <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Users className="w-5 h-5 text-[#1A365D]" />Membros ({cellMembers.length})</CardTitle></CardHeader>
-              <CardContent className="pt-0">
-                <div className="space-y-2">
-                  {cellMembers.slice(0, 8).map((m) => (
-                    <div key={m.id} className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
-                      <Avatar className="w-9 h-9"><AvatarFallback className="bg-[#1A365D]/10 text-[#1A365D] text-xs">{m.name.charAt(0)}</AvatarFallback></Avatar>
-                      <div className="flex-1 min-w-0"><p className="text-sm font-medium text-[#1A202C] truncate">{m.name}</p><p className="text-xs text-[#718096]">{m.role}</p></div>
-                      <Button size="icon" variant="ghost" className="w-8 h-8 text-[#718096] hover:text-[#1A365D]" onClick={() => alert('Ligar: ' + m.phone)}><Phone className="w-4 h-4" /></Button>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div custom={2} variants={fadeInUp} initial="hidden" animate="visible">
-            <Card className="border-0 shadow-md">
-              <CardHeader><CardTitle className="flex items-center gap-2 text-base"><FileText className="w-5 h-5 text-[#1A365D]" />Material do Trimestre</CardTitle></CardHeader>
-              <CardContent className="pt-0">
-                <p className="text-sm text-[#4A5568] mb-3">Trimestre 1/2026 — Crescendo em Cristo</p>
-                <div className="space-y-2">
-                  {Array.from({ length: 4 }, (_, i) => (
-                    <div key={i} className={`flex items-center justify-between p-3 rounded-lg ${i === 2 ? 'bg-[#D4A843]/10 border border-[#D4A843]/30' : 'bg-[#F7FAFC]'}`}>
-                      <span className="text-sm text-[#1A202C]">Semana {i + 1}: {['O Amor de Deus', 'Andando em Obediência', 'O Fruto do Espírito', 'Compartilhando a Fé'][i]}</span>
-                      <Button size="sm" variant="ghost" className="text-[#1A365D]">PDF</Button>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-
-        <motion.div custom={3} variants={fadeInUp} initial="hidden" animate="visible">
-          <Card className="border-0 shadow-md h-full flex flex-col">
-            <CardHeader><CardTitle className="flex items-center gap-2 text-base"><MessageSquare className="w-5 h-5 text-[#1A365D]" />Comunicados da Célula</CardTitle></CardHeader>
-            <CardContent className="pt-0 flex-1 flex flex-col">
-              <div className="flex-1 space-y-3 overflow-y-auto max-h-[400px]">
-                {messages.map((msg, i) => (
-                  <div key={i} className="bg-[#F7FAFC] rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-[#1A365D]">{msg.from}</span>
-                      <span className="text-[10px] text-[#718096]">{msg.time}</span>
-                    </div>
-                    <p className="text-sm text-[#4A5568]">{msg.text}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-2 mt-3 pt-3 border-t">
-                <Input placeholder="Escrever mensagem..." value={messageText} onChange={e => setMessageText(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} className="text-sm" />
-                <Button size="icon" className="bg-[#1A365D] hover:bg-[#2C5282] shrink-0" onClick={handleSend}><Send className="w-4 h-4" /></Button>
-              </div>
+      {/* Minhas células */}
+      <section className="space-y-3">
+        <h2 className="font-heading text-lg font-bold text-[#1A202C]">Minha participação</h2>
+        {minhas.length === 0 ? (
+          <Card className="border-0 shadow-sm">
+            <CardContent className="py-10 text-center">
+              <Church className="mx-auto mb-3 h-9 w-9 text-gray-300" />
+              <p className="text-sm text-[#4A5568]">Você ainda não participa de nenhuma célula.</p>
+              <p className="mt-1 text-xs text-[#718096]">Escolha uma abaixo e peça para entrar.</p>
             </CardContent>
           </Card>
-        </motion.div>
-      </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {minhas.map((c) => {
+              const pend = status[c.id] === 'pendente'
+              return (
+                <Card key={c.id} className="border-0 shadow-md">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center justify-between text-base">
+                      {c.name}
+                      {pend
+                        ? <Badge className="bg-[#F59E0B] text-[10px] text-white">aguardando</Badge>
+                        : <Badge className="gap-1 bg-[#38A169] text-[10px] text-white"><CheckCircle className="h-3 w-3" /> membro</Badge>}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-1.5 text-sm text-[#4A5568]">
+                    {c.leaderName && <p><span className="text-[#718096]">Líder:</span> {c.leaderName}</p>}
+                    {c.day && <p className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-[#718096]" />{c.day} {c.time}</p>}
+                    {c.location && <p className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-[#718096]" />{c.location}</p>}
+                    {pend && (
+                      <Button variant="ghost" size="sm" disabled={busy === c.id} onClick={() => cancelar(c)} className="mt-2 h-8 w-full text-xs text-[#718096]">
+                        {busy === c.id && <Loader2 className="mr-1 h-3 w-3 animate-spin" />} Cancelar pedido
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Células disponíveis */}
+      <section className="space-y-3 pt-2">
+        <div>
+          <h2 className="font-heading text-lg font-bold text-[#1A202C]">Células disponíveis</h2>
+          <p className="text-xs text-[#718096]">Peça para entrar. O líder da célula aprova.</p>
+        </div>
+
+        {cells.length > 0 && (
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#718096]" />
+            <Input placeholder="Buscar por nome, bairro ou perfil" value={search}
+              onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          </div>
+        )}
+
+        {disponiveis.length === 0 ? (
+          <Card className="border-0 shadow-sm">
+            <CardContent className="py-10 text-center text-sm text-[#718096]">
+              {cells.length === 0 ? 'Nenhuma célula cadastrada ainda.' : 'Nenhuma outra célula disponível.'}
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {disponiveis.map((c) => (
+              <Card key={c.id} className="border-0 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">{c.name}</CardTitle>
+                  <CardDescription className="flex flex-wrap gap-1.5">
+                    {c.profile && <Badge variant="outline" className="text-[10px]">{c.profile}</Badge>}
+                    {c.region && <Badge variant="outline" className="text-[10px]">{c.region}</Badge>}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-1.5 text-sm text-[#4A5568]">
+                  {c.leaderName && <p><span className="text-[#718096]">Líder:</span> {c.leaderName}</p>}
+                  {c.day && <p className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-[#718096]" />{c.day} {c.time}</p>}
+                  {c.location && <p className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-[#718096]" />{c.location}</p>}
+                  <Button size="sm" disabled={busy === c.id} onClick={() => pedir(c)} className="mt-2 w-full gap-1 bg-[#1A365D] hover:bg-[#1A365D]/90">
+                    {busy === c.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+                    Quero participar
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   )
 }
