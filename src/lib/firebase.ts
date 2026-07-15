@@ -3,7 +3,10 @@
 
 import { initializeApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, FacebookAuthProvider, type Auth } from 'firebase/auth';
-import { getFirestore, type Firestore } from 'firebase/firestore';
+import {
+  getFirestore, initializeFirestore, persistentLocalCache,
+  persistentMultipleTabManager, type Firestore,
+} from 'firebase/firestore';
 
 // Check if Firebase is properly configured
 const hasValidConfig = (): boolean => {
@@ -35,7 +38,18 @@ let facebookProvider: FacebookAuthProvider;
 if (isConfigured) {
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
-  db = getFirestore(app);
+  // Firestore com cache local persistente (IndexedDB): o app funciona OFFLINE
+  // — o líder faz a chamada e lança a oferta sem sinal, e sincroniza sozinho
+  // quando a internet volta. Multi-abas suportado. Se algo falhar (ex.: aba
+  // anônima), cai no Firestore padrão sem quebrar.
+  try {
+    db = initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    });
+  } catch (e) {
+    console.warn('Cache offline indisponível, usando Firestore padrão.', e);
+    db = getFirestore(app);
+  }
   googleProvider = new GoogleAuthProvider();
   facebookProvider = new FacebookAuthProvider();
 } else {
