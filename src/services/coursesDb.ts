@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore'
 import { metodo33Lessons, lideresLessons, missoesLessons } from '@/data/mock'
 import { batismoLessons } from '@/data/batismo'
+import { fundamentosLessons } from '@/data/fundamentos'
 
 // ----------------------------- Tipos ---------------------------------------
 export interface Material {
@@ -32,6 +33,13 @@ export interface Course {
   updatedAt?: unknown
 }
 
+/** Uma pergunta de prova (múltipla escolha). */
+export interface QuizQuestion {
+  question: string
+  options: string[]
+  correctIndex: number   // índice (0-based) da alternativa correta
+}
+
 export interface Lesson {
   id: string
   order: number
@@ -45,6 +53,7 @@ export interface Lesson {
   homework?: string
   memoryVerse?: string
   materials?: Material[]
+  quiz?: QuizQuestion[]
   createdAt?: unknown
   updatedAt?: unknown
 }
@@ -116,6 +125,7 @@ export async function createLesson(courseId: string, data: Partial<Lesson>): Pro
     homework: data.homework || '',
     memoryVerse: data.memoryVerse || '',
     materials: data.materials || [],
+    quiz: data.quiz || [],
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
@@ -182,6 +192,15 @@ const SEED_COURSES: { id: string; title: string; description: string; category: 
       { title: 'Apostila do Aluno — Curso de Batismo (PDF)', url: '/Apostila-Curso-de-Batismo.pdf' },
     ],
   },
+  {
+    id: 'fundamentos-fe',
+    title: 'Fundamentos da Fé',
+    description: 'Teologia sistemática em 9 módulos + os três credos: Revelação, Deus, Cristo, Espírito Santo, o homem, anjos, salvação, a Igreja e as últimas coisas. Cada lição com prova e certificado ao final.',
+    category: 'Doutrina',
+    order: 5,
+    color: '#4C1D95',
+    lessons: fundamentosLessons as any[],
+  },
 ]
 
 export interface MigrationReport {
@@ -226,7 +245,8 @@ export async function migrateSeedCourses(): Promise<MigrationReport> {
         practicalActivity: l.practicalActivity || '',
         homework: l.homework || '',
         memoryVerse: l.memoryVerse || '',
-        materials: [],
+        materials: l.materials || [],
+        quiz: l.quiz || [],
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       })

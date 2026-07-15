@@ -83,6 +83,62 @@ export const markLessonComplete = async (userId: string, courseId: string, lesso
   }
 };
 
+// ============ QUIZ / PROVA ============
+// Nota mínima para aprovar numa prova (em %).
+export const QUIZ_PASS_PCT = 70;
+
+/**
+ * Grava o resultado de uma prova no progresso do aluno (por curso).
+ * Se a nota atingir a mínima, a lição também é marcada como concluída.
+ * Guarda a MELHOR nota já obtida — refazer nunca piora o resultado.
+ */
+export const recordQuizResult = async (
+  userId: string,
+  courseId: string,
+  lessonId: string,
+  scorePct: number,
+  passed: boolean
+) => {
+  const ref = doc(db, 'progress', userId);
+  const snap = await getDoc(ref);
+  const data = snap.exists() ? snap.data() : { userId, completedLessons: [], courses: {} };
+
+  const courses = data.courses || {};
+  if (!courses[courseId]) courses[courseId] = { completedLessons: [], quiz: {} };
+  if (!courses[courseId].quiz) courses[courseId].quiz = {};
+
+  const anterior = courses[courseId].quiz[lessonId];
+  const melhor = anterior && anterior.score > scorePct ? anterior.score : scorePct;
+  courses[courseId].quiz[lessonId] = {
+    score: melhor,
+    passed: passed || (anterior && anterior.passed) || false,
+    at: new Date().toISOString(),
+  };
+
+  const completedLessons = data.completedLessons || [];
+  if (passed) {
+    if (!completedLessons.includes(lessonId)) completedLessons.push(lessonId);
+    if (!courses[courseId].completedLessons) courses[courseId].completedLessons = [];
+    if (!courses[courseId].completedLessons.includes(lessonId)) {
+      courses[courseId].completedLessons.push(lessonId);
+    }
+  }
+
+  if (snap.exists()) {
+    await updateDoc(ref, { completedLessons, courses, updatedAt: serverTimestamp() });
+  } else {
+    await setDoc(ref, { userId, completedLessons, courses, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+  }
+};
+
+/** Lições concluídas de um curso específico (para checar o certificado). */
+export const getCourseCompletion = async (userId: string, courseId: string): Promise<string[]> => {
+  const snap = await getDoc(doc(db, 'progress', userId));
+  if (!snap.exists()) return [];
+  const c = (snap.data().courses || {})[courseId];
+  return c?.completedLessons || [];
+};
+
 // ============ CELL GROUP SERVICES ============
 export const getCellGroups = async () => {
   const q = query(collection(db, 'cellGroups'), orderBy('name'));
