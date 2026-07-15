@@ -168,8 +168,8 @@ export default function Dashboard() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
         <div className="flex flex-wrap gap-3">
           {[
-            { label: 'Assistir Culto', icon: Play, variant: 'default' as const, href: '/midia-membro' },
-            { label: 'Meus Cursos', icon: GraduationCap, variant: 'outline' as const, href: '/cursos' },
+            { label: 'Meus Cursos', icon: GraduationCap, variant: 'default' as const, href: '/cursos' },
+            { label: 'Minhas Células', icon: Church, variant: 'outline' as const, href: '/minhas-celulas' },
             { label: 'Doações', icon: Heart, variant: 'outline' as const, href: '/minhas-doacoes' },
             { label: 'Pedir Oração', icon: HandHelping, variant: 'ghost' as const, href: '/contato' },
             { label: 'Comunicados', icon: Users, variant: 'ghost' as const, href: '/comunicados' },

@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { CheckCheck } from 'lucide-react'
+import { CheckCheck, Loader2, Bell } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { announcements } from '@/data/mock'
 import { listAnnouncements } from '@/services/adminContentDb'
 
 const categoryColors: Record<string, string> = {
@@ -25,14 +24,14 @@ const categoryLabels: Record<string, string> = {
 }
 
 export default function Comunicados() {
-  const [items, setItems] = useState<any[]>(announcements as any[])
+  const [items, setItems] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    listAnnouncements().then((db) => {
-      if (db.length > 0) {
-        setItems(db.map((a) => ({ id: a.id, title: a.title, content: a.content, category: a.category, date: a.date || '', unread: true })))
-      }
-    }).catch(() => {})
+    listAnnouncements()
+      .then((db) => setItems(db.map((a) => ({ id: a.id, title: a.title, content: a.content, category: a.category, date: a.date || '', unread: true }))))
+      .catch(() => {})
+      .finally(() => setLoading(false))
   }, [])
 
   const markAllRead = () => setItems(items.map(a => ({ ...a, unread: false })))
@@ -55,6 +54,16 @@ export default function Comunicados() {
         {unreadCount > 0 && <Button variant="outline" size="sm" className="gap-2" onClick={markAllRead}><CheckCheck className="w-4 h-4" />Marcar todos como lidos</Button>}
       </motion.div>
 
+      {loading ? (
+        <div className="flex items-center justify-center py-16 text-[#718096]"><Loader2 className="mr-2 h-6 w-6 animate-spin" /> Carregando...</div>
+      ) : items.length === 0 ? (
+        <Card className="border-0 shadow-sm">
+          <CardContent className="py-14 text-center">
+            <Bell className="mx-auto mb-3 h-10 w-10 text-gray-300" />
+            <p className="text-sm text-[#4A5568]">Nenhum comunicado no momento.</p>
+          </CardContent>
+        </Card>
+      ) : (
       <Tabs defaultValue="Todos">
         <TabsList className="mb-6 flex flex-wrap h-auto gap-1"><TabsTrigger value="Todos">Todos</TabsTrigger>{tabs.slice(1).map(t => <TabsTrigger key={t} value={t}>{t}</TabsTrigger>)}</TabsList>
 
@@ -88,6 +97,7 @@ export default function Comunicados() {
           </TabsContent>
         ))}
       </Tabs>
+      )}
     </div>
   )
 }
