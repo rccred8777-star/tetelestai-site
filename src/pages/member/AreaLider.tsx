@@ -281,7 +281,9 @@ export default function AreaLider() {
                         {m.offeringStatus === 'pendente' && (
                           <>
                             <span className="text-xs text-[#718096]">Oferta não lançada</span>
-                            {souSecretario && (
+                            {/* O secretário lança. Se a célula não tem secretário nomeado,
+                                o próprio líder pode lançar. */}
+                            {(souSecretario || (souLider && !cell.secretarioId)) && (
                               <Button size="sm" variant="outline" className="h-7 px-2 text-[11px]"
                                 onClick={() => setOfferingFor(m)}>
                                 Lançar oferta
