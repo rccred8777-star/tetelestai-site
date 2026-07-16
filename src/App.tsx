@@ -24,6 +24,8 @@ import MidiaMembro from '@/pages/member/MidiaMembro'
 import Comunicados from '@/pages/member/Comunicados'
 import MinhasDoacoes from '@/pages/member/MinhasDoacoes'
 import MuralOracao from '@/pages/member/MuralOracao'
+import Memorizacao from '@/pages/member/Memorizacao'
+import AdminVersiculos from '@/pages/member/AdminVersiculos'
 import Admin from '@/pages/member/Admin'
 import AreaLider from '@/pages/member/AreaLider'
 import Cursos from '@/pages/member/Cursos'
@@ -124,6 +126,7 @@ export default function App() {
       <Route path="/comunicados" element={<ProtectedRoute><Comunicados /></ProtectedRoute>} />
       <Route path="/minhas-doacoes" element={<ProtectedRoute><MinhasDoacoes /></ProtectedRoute>} />
       <Route path="/mural-oracao" element={<ProtectedRoute><MuralOracao /></ProtectedRoute>} />
+      <Route path="/memorizacao" element={<ProtectedRoute><Memorizacao /></ProtectedRoute>} />
 
       {/* Courses - any authenticated user */}
       <Route path="/cursos" element={<ProtectedRoute><Cursos /></ProtectedRoute>} />
@@ -142,6 +145,7 @@ export default function App() {
       <Route path="/admin/comunicados" element={<AdminRoute><AdminComunicados /></AdminRoute>} />
       <Route path="/admin/eventos" element={<AdminRoute><AdminEventos /></AdminRoute>} />
       <Route path="/admin/celulas" element={<AdminRoute><AdminCelulas /></AdminRoute>} />
+      <Route path="/admin/versiculos" element={<AdminRoute><AdminVersiculos /></AdminRoute>} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
