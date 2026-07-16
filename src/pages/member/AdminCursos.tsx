@@ -20,6 +20,7 @@ import {
   listLessons, createLesson, updateLesson, deleteLesson, swapLessonOrder,
   migrateSeedCourses,
   backfillCourseQuizzes,
+  backfillCourseContent,
   type Course, type Lesson, type Material, type QuizQuestion,
 } from '@/services/coursesDb'
 import { listStudents, type Student } from '@/services/studentsDb'
@@ -561,6 +562,7 @@ export default function AdminCursos() {
   const [loading, setLoading] = useState(true)
   const [migrating, setMigrating] = useState(false)
   const [applyingQuiz, setApplyingQuiz] = useState(false)
+  const [syncing, setSyncing] = useState(false)
   const [rosterDialog, setRosterDialog] = useState(false)
   const [rosterCourse, setRosterCourse] = useState<Course | null>(null)
 
@@ -635,6 +637,23 @@ export default function AdminCursos() {
     }
   }
 
+  const runContentSync = async () => {
+    if (!confirm('Preencher o conteúdo das aulas que estão sem material (ex.: Fundamentos da Fé)? Só completa o que está vazio; não apaga nada que você já editou.')) return
+    setSyncing(true)
+    try {
+      const r = await backfillCourseContent()
+      const total = r.reduce((s, x) => s + x.updated, 0)
+      toast.success(`Conteúdo preenchido em ${total} aula(s).`)
+      if (selected) await reloadLessons(selected.id)
+      await reloadCourses()
+    } catch (e) {
+      toast.error('Erro ao preencher conteúdo')
+      console.error(e)
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   const removeCourse = async (c: Course) => {
     if (!confirm(`Excluir o curso "${c.title}" e TODAS as suas aulas? Esta ação não pode ser desfeita.`)) return
     try {
@@ -693,6 +712,10 @@ export default function AdminCursos() {
           <Button variant="outline" onClick={runQuizBackfill} disabled={applyingQuiz} className="gap-1">
             {applyingQuiz ? <Loader2 className="h-4 w-4 animate-spin" /> : <DownloadCloud className="h-4 w-4" />}
             Aplicar mini-provas
+          </Button>
+          <Button variant="outline" onClick={runContentSync} disabled={syncing} className="gap-1">
+            {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <DownloadCloud className="h-4 w-4" />}
+            Preencher conteúdo
           </Button>
           <Button onClick={() => { setEditingCourse(null); setCourseDialog(true) }} className="gap-1 bg-[#1A365D] hover:bg-[#1A365D]/90">
             <Plus className="h-4 w-4" /> Novo Curso
