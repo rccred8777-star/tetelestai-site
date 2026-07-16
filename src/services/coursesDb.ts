@@ -13,6 +13,7 @@ import {
 import { metodo33Lessons, lideresLessons, missoesLessons } from '@/data/mock'
 import { batismoLessons } from '@/data/batismo'
 import { fundamentosLessons } from '@/data/fundamentos'
+import { COURSE_QUIZZES } from '@/data/quizzesCursos'
 
 // ----------------------------- Tipos ---------------------------------------
 export interface Material {
@@ -207,6 +208,29 @@ export interface MigrationReport {
   created: string[]
   skipped: string[]
   lessonsInserted: number
+}
+
+/**
+ * Aplica as mini-provas (quiz de fim de aula) nos cursos já existentes no banco.
+ * As aulas já foram criadas; aqui só atualizamos o campo `quiz` de cada aula,
+ * casando pela ORDEM da aula. Idempotente: rodar de novo só reescreve o mesmo quiz.
+ */
+export async function backfillCourseQuizzes(): Promise<{ courseId: string; updated: number }[]> {
+  const result: { courseId: string; updated: number }[] = []
+  for (const courseId of Object.keys(COURSE_QUIZZES)) {
+    const byOrder = COURSE_QUIZZES[courseId] // índice 0 = aula 1
+    const lessons = await listLessons(courseId)
+    let updated = 0
+    for (const l of lessons) {
+      const quiz = byOrder[(l.order || 1) - 1]
+      if (quiz && quiz.length) {
+        await updateLesson(courseId, l.id, { quiz })
+        updated++
+      }
+    }
+    result.push({ courseId, updated })
+  }
+  return result
 }
 
 export async function migrateSeedCourses(): Promise<MigrationReport> {
