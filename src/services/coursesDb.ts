@@ -274,7 +274,13 @@ export async function backfillCourseContent(): Promise<{ courseId: string; updat
       for (const campo of campos) {
         const atual = (l as Record<string, unknown>)[campo]
         const semente = (s as Record<string, unknown>)[campo]
-        if (isEmpty(atual) && !isEmpty(semente)) {
+        if (isEmpty(semente)) continue
+        // 'content' é o texto de ensino: sempre sincroniza com o código (a fonte
+        // da verdade), para que atualizações (ex.: aprofundamento) cheguem ao ar.
+        // Os demais campos são preenchidos só quando estão vazios (não destrutivo).
+        if (campo === 'content') {
+          if (atual !== semente) (patch as Record<string, unknown>)[campo] = semente
+        } else if (isEmpty(atual)) {
           ;(patch as Record<string, unknown>)[campo] = semente
         }
       }
