@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import {
   LayoutDashboard, User, Users, BookOpen, Calendar, Bell,
   Heart, LogOut, Menu, X, ChevronLeft, ChevronRight,
-  PlayCircle, Shield, TrendingUp, Church, GraduationCap, Megaphone, Network
+  PlayCircle, Shield, TrendingUp, Church, GraduationCap, Megaphone, Network, HandHeart
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,7 @@ const memberNav = [
   { label: 'Minhas Celulas', href: '/minhas-celulas', icon: Users },
   { label: 'Cursos e Materiais', href: '/cursos', icon: GraduationCap },
   { label: 'Meus Eventos', href: '/meus-eventos', icon: Calendar },
+  { label: 'Mural de Oracao', href: '/mural-oracao', icon: HandHeart },
   { label: 'Comunicados', href: '/comunicados', icon: Bell },
   { label: 'Minhas Doacoes', href: '/minhas-doacoes', icon: Heart },
 ]
