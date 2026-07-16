@@ -23,6 +23,7 @@ import MeusEventos from '@/pages/member/MeusEventos'
 import MidiaMembro from '@/pages/member/MidiaMembro'
 import Comunicados from '@/pages/member/Comunicados'
 import MinhasDoacoes from '@/pages/member/MinhasDoacoes'
+import MuralOracao from '@/pages/member/MuralOracao'
 import Admin from '@/pages/member/Admin'
 import AreaLider from '@/pages/member/AreaLider'
 import Cursos from '@/pages/member/Cursos'
@@ -122,6 +123,7 @@ export default function App() {
       <Route path="/midia-membro" element={<ProtectedRoute><MidiaMembro /></ProtectedRoute>} />
       <Route path="/comunicados" element={<ProtectedRoute><Comunicados /></ProtectedRoute>} />
       <Route path="/minhas-doacoes" element={<ProtectedRoute><MinhasDoacoes /></ProtectedRoute>} />
+      <Route path="/mural-oracao" element={<ProtectedRoute><MuralOracao /></ProtectedRoute>} />
 
       {/* Courses - any authenticated user */}
       <Route path="/cursos" element={<ProtectedRoute><Cursos /></ProtectedRoute>} />
