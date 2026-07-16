@@ -19,6 +19,7 @@ import {
   listCourses, createCourse, updateCourse, deleteCourse,
   listLessons, createLesson, updateLesson, deleteLesson, swapLessonOrder,
   migrateSeedCourses,
+  backfillCourseQuizzes,
   type Course, type Lesson, type Material, type QuizQuestion,
 } from '@/services/coursesDb'
 import { listStudents, type Student } from '@/services/studentsDb'
@@ -559,6 +560,7 @@ export default function AdminCursos() {
   const [courses, setCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(true)
   const [migrating, setMigrating] = useState(false)
+  const [applyingQuiz, setApplyingQuiz] = useState(false)
   const [rosterDialog, setRosterDialog] = useState(false)
   const [rosterCourse, setRosterCourse] = useState<Course | null>(null)
 
@@ -617,6 +619,22 @@ export default function AdminCursos() {
     }
   }
 
+  const runQuizBackfill = async () => {
+    if (!confirm('Aplicar as mini-provas de fim de aula no Método 3/3, Escola de Líderes e Escola de Missões? As aulas atuais receberão 4 perguntas cada.')) return
+    setApplyingQuiz(true)
+    try {
+      const r = await backfillCourseQuizzes()
+      const total = r.reduce((s, x) => s + x.updated, 0)
+      toast.success(`Mini-provas aplicadas em ${total} aula(s).`)
+      if (selected) await reloadLessons(selected.id)
+    } catch (e) {
+      toast.error('Erro ao aplicar as provas')
+      console.error(e)
+    } finally {
+      setApplyingQuiz(false)
+    }
+  }
+
   const removeCourse = async (c: Course) => {
     if (!confirm(`Excluir o curso "${c.title}" e TODAS as suas aulas? Esta ação não pode ser desfeita.`)) return
     try {
@@ -671,6 +689,10 @@ export default function AdminCursos() {
           <Button variant="outline" onClick={runMigration} disabled={migrating} className="gap-1">
             {migrating ? <Loader2 className="h-4 w-4 animate-spin" /> : <DownloadCloud className="h-4 w-4" />}
             Importar conteúdo do site
+          </Button>
+          <Button variant="outline" onClick={runQuizBackfill} disabled={applyingQuiz} className="gap-1">
+            {applyingQuiz ? <Loader2 className="h-4 w-4 animate-spin" /> : <DownloadCloud className="h-4 w-4" />}
+            Aplicar mini-provas
           </Button>
           <Button onClick={() => { setEditingCourse(null); setCourseDialog(true) }} className="gap-1 bg-[#1A365D] hover:bg-[#1A365D]/90">
             <Plus className="h-4 w-4" /> Novo Curso
