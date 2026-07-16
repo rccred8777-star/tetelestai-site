@@ -77,6 +77,7 @@ export interface Membership {
   cellId: string
   userId: string
   status: MembershipStatus
+  phone?: string        // telefone que o líder cadastra (para o WhatsApp)
   createdAt?: unknown
 }
 
@@ -242,6 +243,22 @@ export async function approveMember(cellId: string, userId: string): Promise<voi
 /** Remove o membro (ou recusa o pedido). */
 export async function removeMember(cellId: string, userId: string): Promise<void> {
   await deleteDoc(doc(db, 'cellMemberships', membershipId(cellId, userId)))
+}
+
+/** O líder cadastra/atualiza o telefone do membro (para contato/WhatsApp). */
+export async function setMemberPhone(cellId: string, userId: string, phone: string): Promise<void> {
+  await updateDoc(doc(db, 'cellMemberships', membershipId(cellId, userId)), {
+    phone: phone.trim(),
+  })
+}
+
+/** Monta um link de WhatsApp a partir de um telefone brasileiro digitado livre. */
+export function waLink(phone?: string | null): string | null {
+  if (!phone) return null
+  let d = phone.replace(/\D/g, '')       // só dígitos
+  if (d.length < 10) return null         // incompleto
+  if (!d.startsWith('55')) d = '55' + d  // DDI Brasil
+  return `https://wa.me/${d}`
 }
 
 export async function listCellMemberships(cellId: string): Promise<Membership[]> {
