@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import {
   Church, Users, Loader2, MapPin, Clock, Plus, Check, Trash2,
   UserPlus, Search, Wallet, Lock, AlertTriangle, TrendingUp, HandHeart,
-  MessageCircle, Phone, AlertCircle,
+  MessageCircle, Phone, AlertCircle, Gift, Heart, RotateCcw,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -21,8 +21,9 @@ import {
   getCellILead, listCellMemberships, listMeetings, saveMeeting,
   addMember, approveMember, removeMember, setTimoteo, setSecretario,
   launchOffering, confirmOffering, computeStats, brl,
-  setMemberPhone, waLink,
-  type Cell, type Meeting, type Membership,
+  setMemberPhone, waLink, setMemberBirthday, fmtAniversario, aniversarioNoMes,
+  listPrayers, addPrayer, setPrayerAnswered, deletePrayer,
+  type Cell, type Meeting, type Membership, type Prayer,
 } from '@/services/cellsDb'
 import { listStudents, type Student } from '@/services/studentsDb'
 
@@ -36,6 +37,7 @@ export default function AreaLider() {
   const [memberships, setMemberships] = useState<Membership[]>([])
   const [students, setStudents] = useState<Student[]>([])
   const [meetings, setMeetings] = useState<Meeting[]>([])
+  const [prayers, setPrayers] = useState<Prayer[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
 
@@ -51,12 +53,13 @@ export default function AreaLider() {
       const c = await getCellILead(user.uid)
       setCell(c)
       if (c) {
-        const [ms, ss, mt] = await Promise.all([
-          listCellMemberships(c.id), listStudents(), listMeetings(c.id),
+        const [ms, ss, mt, pr] = await Promise.all([
+          listCellMemberships(c.id), listStudents(), listMeetings(c.id), listPrayers(c.id),
         ])
         setMemberships(ms)
         setStudents(ss)
         setMeetings(mt)
+        setPrayers(pr)
       }
     } catch (e) { toast.error('Erro ao carregar a célula'); console.error(e) }
     finally { setLoading(false) }
@@ -139,6 +142,32 @@ export default function AreaLider() {
     catch (e) { toast.error('Erro'); console.error(e) }
   }
 
+  // ---- pedidos de oração ----
+  const [novaOracao, setNovaOracao] = useState('')
+  const [quemOracao, setQuemOracao] = useState('')
+  const criarOracao = async () => {
+    if (!novaOracao.trim()) { toast.error('Escreva o pedido'); return }
+    try {
+      await addPrayer(cell.id, novaOracao, quemOracao)
+      setNovaOracao(''); setQuemOracao('')
+      await carregar()
+      toast.success('Pedido registrado')
+    } catch (e) { toast.error('Erro ao registrar'); console.error(e) }
+  }
+  const marcarRespondido = async (p: Prayer) => {
+    try { await setPrayerAnswered(cell.id, p.id, !p.answered); await carregar() }
+    catch (e) { toast.error('Erro'); console.error(e) }
+  }
+  const removerOracao = async (p: Prayer) => {
+    if (!confirm('Excluir este pedido de oração?')) return
+    try { await deletePrayer(cell.id, p.id); await carregar(); toast.info('Excluído') }
+    catch (e) { toast.error('Erro'); console.error(e) }
+  }
+
+  // aniversariantes do mês atual
+  const mesAtual = new Date().getMonth() + 1
+  const aniversariantes = aprovados.filter((m) => aniversarioNoMes(m.birthday, mesAtual))
+
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
@@ -167,6 +196,12 @@ export default function AreaLider() {
           <TabsTrigger value="encontros" className="gap-1.5 text-xs sm:text-sm">
             <HandHeart className="h-4 w-4" /> Encontros
           </TabsTrigger>
+          <TabsTrigger value="oracao" className="gap-1.5 text-xs sm:text-sm">
+            <Heart className="h-4 w-4" /> Oração
+            {prayers.filter((p) => !p.answered).length > 0 && (
+              <Badge className="ml-1 bg-[#E8532D] px-1.5 text-[10px] text-white">{prayers.filter((p) => !p.answered).length}</Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="estatisticas" className="gap-1.5 text-xs sm:text-sm">
             <TrendingUp className="h-4 w-4" /> Números
           </TabsTrigger>
@@ -174,6 +209,34 @@ export default function AreaLider() {
 
         {/* ============================= MEMBROS ============================= */}
         <TabsContent value="membros" className="mt-4 space-y-4">
+          {aniversariantes.length > 0 && (
+            <Card className="border-0 bg-[#FDF6EC] shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-sm text-[#92400E]">
+                  <Gift className="h-4 w-4" /> Aniversariantes do mês
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                {aniversariantes
+                  .slice()
+                  .sort((a, b) => (a.birthday || '').slice(5) < (b.birthday || '').slice(5) ? -1 : 1)
+                  .map((m) => {
+                    const s = membroDe(m.userId)
+                    const wa = waLink(m.phone)
+                    return (
+                      <div key={m.id} className="flex items-center gap-2 rounded-full bg-white px-3 py-1.5 shadow-sm">
+                        <span className="text-sm font-medium text-[#1A202C]">{nomeDe(s)}</span>
+                        <span className="text-xs text-[#B45309]">{fmtAniversario(m.birthday)}</span>
+                        {wa && (
+                          <a href={wa} target="_blank" rel="noreferrer" title="Parabenizar no WhatsApp"
+                            className="text-[#128C7E]"><MessageCircle className="h-3.5 w-3.5" /></a>
+                        )}
+                      </div>
+                    )
+                  })}
+              </CardContent>
+            </Card>
+          )}
           {pendentes.length > 0 && (
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-3">
@@ -368,6 +431,66 @@ export default function AreaLider() {
           </Card>
         </TabsContent>
 
+        {/* ============================= ORAÇÃO ============================== */}
+        <TabsContent value="oracao" className="mt-4 space-y-4">
+          <Card className="border-0 shadow-md">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Heart className="h-4 w-4 text-[#E8532D]" /> Novo pedido de oração
+              </CardTitle>
+              <CardDescription>Registre os pedidos da célula para orarem juntos.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Textarea
+                value={novaOracao} onChange={(e) => setNovaOracao(e.target.value)}
+                placeholder="Ex.: Pela saúde da mãe do João, pela família da Ana..."
+                className="min-h-[70px]"
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  value={quemOracao} onChange={(e) => setQuemOracao(e.target.value)}
+                  placeholder="De quem é o pedido? (opcional)" className="h-9 flex-1 min-w-[180px]"
+                />
+                <Button onClick={criarOracao} className="h-9 gap-1 bg-[#1A365D] hover:bg-[#1A365D]/90">
+                  <Plus className="h-4 w-4" /> Adicionar
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 shadow-md">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Pedidos ({prayers.filter((p) => !p.answered).length} em aberto)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {prayers.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-gray-200 py-10 text-center text-sm text-[#718096]">
+                  Nenhum pedido registrado ainda.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {prayers.slice().sort((a, b) => Number(a.answered) - Number(b.answered)).map((p) => (
+                    <div key={p.id} className={`flex items-start gap-2 rounded-lg border px-3 py-2.5 ${p.answered ? 'border-gray-100 bg-gray-50/60' : 'border-[#E8532D]/20 bg-[#FFF5F2]'}`}>
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-sm ${p.answered ? 'text-[#718096] line-through' : 'text-[#1A202C]'}`}>{p.text}</p>
+                        {p.memberName && <p className="mt-0.5 text-[11px] text-[#718096]">— {p.memberName}</p>}
+                        {p.answered && <Badge className="mt-1 bg-[#38A169] text-[10px] text-white">Respondida 🙌</Badge>}
+                      </div>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title={p.answered ? 'Reabrir' : 'Marcar como respondida'}
+                        onClick={() => marcarRespondido(p)}>
+                        {p.answered ? <RotateCcw className="h-3.5 w-3.5 text-[#718096]" /> : <Check className="h-4 w-4 text-[#38A169]" />}
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400" onClick={() => removerOracao(p)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* ========================== ESTATÍSTICAS =========================== */}
         <TabsContent value="estatisticas" className="mt-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -428,9 +551,14 @@ function FichaDialog({ membership, cell, student, totalEncontros, presencas, fal
   podeEditar: boolean; onClose: () => void; onSaved: () => void
 }) {
   const [phone, setPhone] = useState('')
+  const [birthday, setBirthday] = useState('')
   const [saving, setSaving] = useState(false)
+  const [savingB, setSavingB] = useState(false)
 
-  useEffect(() => { setPhone(membership?.phone || '') }, [membership])
+  useEffect(() => {
+    setPhone(membership?.phone || '')
+    setBirthday(membership?.birthday || '')
+  }, [membership])
 
   if (!membership) return null
 
@@ -445,6 +573,16 @@ function FichaDialog({ membership, cell, student, totalEncontros, presencas, fal
       onSaved()
     } catch (e) { toast.error('Erro ao salvar'); console.error(e) }
     finally { setSaving(false) }
+  }
+
+  const salvarAniversario = async () => {
+    setSavingB(true)
+    try {
+      await setMemberBirthday(cell.id, membership.userId, birthday)
+      toast.success('Aniversário salvo')
+      onSaved()
+    } catch (e) { toast.error('Erro ao salvar'); console.error(e) }
+    finally { setSavingB(false) }
   }
 
   return (
@@ -494,6 +632,22 @@ function FichaDialog({ membership, cell, student, totalEncontros, presencas, fal
               <p className="flex items-center gap-1 text-xs text-[#718096]">
                 <Phone className="h-3 w-3" /> Cadastre um telefone para liberar o WhatsApp.
               </p>
+            )}
+          </div>
+
+          {/* Aniversário */}
+          <div className="space-y-1.5">
+            <Label className="flex items-center gap-1.5"><Gift className="h-3.5 w-3.5 text-[#B45309]" /> Data de aniversário</Label>
+            {podeEditar ? (
+              <div className="flex gap-2">
+                <Input type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} />
+                <Button variant="outline" size="sm" disabled={savingB || birthday === (membership.birthday || '')}
+                  onClick={salvarAniversario}>
+                  {savingB ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar'}
+                </Button>
+              </div>
+            ) : (
+              <p className="text-sm text-[#4A5568]">{fmtAniversario(membership.birthday) || 'Não cadastrado'}</p>
             )}
           </div>
         </div>
