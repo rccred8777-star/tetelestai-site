@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import {
   Church, Users, Loader2, MapPin, Clock, Plus, Check, Trash2,
   UserPlus, Search, Wallet, Lock, AlertTriangle, TrendingUp, HandHeart,
+  MessageCircle, Phone, AlertCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -20,6 +21,7 @@ import {
   getCellILead, listCellMemberships, listMeetings, saveMeeting,
   addMember, approveMember, removeMember, setTimoteo, setSecretario,
   launchOffering, confirmOffering, computeStats, brl,
+  setMemberPhone, waLink,
   type Cell, type Meeting, type Membership,
 } from '@/services/cellsDb'
 import { listStudents, type Student } from '@/services/studentsDb'
@@ -40,6 +42,7 @@ export default function AreaLider() {
   const [addOpen, setAddOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
   const [offeringFor, setOfferingFor] = useState<Meeting | null>(null)
+  const [fichaFor, setFichaFor] = useState<Membership | null>(null)
 
   const carregar = async () => {
     if (!user) return
@@ -69,6 +72,20 @@ export default function AreaLider() {
   const pendentes = memberships.filter((m) => m.status === 'pendente')
   const membroDe = (uid: string) => students.find((s) => s.id === uid)
   const stats = computeStats(meetings)
+
+  // meetings vem ordenado do mais recente para o mais antigo.
+  // Faltas seguidas = encontros recentes seguidos em que a pessoa NÃO esteve.
+  const faltasSeguidas = (uid: string) => {
+    let c = 0
+    for (const m of meetings) {
+      if ((m.attendance || []).includes(uid)) break
+      c++
+    }
+    return c
+  }
+  const presencas = (uid: string) => meetings.filter((m) => (m.attendance || []).includes(uid)).length
+  // Quem faltou aos 3 últimos encontros (e houve ao menos 3) precisa de visita.
+  const precisaVisita = (uid: string) => meetings.length >= 3 && faltasSeguidas(uid) >= 3
 
   if (loading) {
     return (
@@ -211,12 +228,24 @@ export default function AreaLider() {
                     const s = membroDe(m.userId)
                     const ehTimoteo = cell.timoteoId === m.userId
                     const ehSecretario = cell.secretarioId === m.userId
+                    const faltas = faltasSeguidas(m.userId)
+                    const visita = precisaVisita(m.userId)
+                    const wa = waLink(m.phone)
                     return (
-                      <div key={m.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-100 px-3 py-2.5">
-                        <div className="min-w-0 flex-1">
+                      <div key={m.id} className={`flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2.5 ${visita ? 'border-red-200 bg-red-50/40' : 'border-gray-100'}`}>
+                        <button className="min-w-0 flex-1 text-left" onClick={() => setFichaFor(m)}>
                           <p className="truncate text-sm font-medium text-[#1A202C]">{nomeDe(s)}</p>
-                          <p className="truncate text-[11px] text-[#718096]">{s?.email}</p>
-                        </div>
+                          <p className="truncate text-[11px] text-[#718096]">
+                            {visita ? <span className="font-medium text-red-600">Faltou aos {faltas} últimos encontros — visitar</span> : (s?.email || 'toque para ver a ficha')}
+                          </p>
+                        </button>
+                        {wa && (
+                          <a href={wa} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+                            className="flex h-7 w-7 items-center justify-center rounded-md bg-[#25D366]/10 text-[#128C7E] hover:bg-[#25D366]/20" title="WhatsApp">
+                            <MessageCircle className="h-4 w-4" />
+                          </a>
+                        )}
+                        {visita && <AlertCircle className="h-4 w-4 text-red-500" />}
                         {ehTimoteo && <Badge className="bg-[#7C2D12] text-[10px] text-white">Timóteo</Badge>}
                         {ehSecretario && <Badge className="bg-[#0E7490] text-[10px] text-white">Secretário</Badge>}
                         {souLider && (
@@ -379,7 +408,101 @@ export default function AreaLider() {
         onClose={() => setOfferingFor(null)} onSaved={carregar}
         byUid={user?.uid || ''} byName={meuNome}
       />
+      <FichaDialog
+        membership={fichaFor} cell={cell}
+        student={fichaFor ? membroDe(fichaFor.userId) : undefined}
+        totalEncontros={meetings.length}
+        presencas={fichaFor ? presencas(fichaFor.userId) : 0}
+        faltas={fichaFor ? faltasSeguidas(fichaFor.userId) : 0}
+        podeEditar={souLider}
+        onClose={() => setFichaFor(null)} onSaved={carregar}
+      />
     </div>
+  )
+}
+
+// ------------------------------ Ficha do membro ------------------------------
+function FichaDialog({ membership, cell, student, totalEncontros, presencas, faltas, podeEditar, onClose, onSaved }: {
+  membership: Membership | null; cell: Cell; student?: Student
+  totalEncontros: number; presencas: number; faltas: number
+  podeEditar: boolean; onClose: () => void; onSaved: () => void
+}) {
+  const [phone, setPhone] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { setPhone(membership?.phone || '') }, [membership])
+
+  if (!membership) return null
+
+  const wa = waLink(phone || membership.phone)
+  const visita = totalEncontros >= 3 && faltas >= 3
+
+  const salvarTelefone = async () => {
+    setSaving(true)
+    try {
+      await setMemberPhone(cell.id, membership.userId, phone)
+      toast.success('Telefone salvo')
+      onSaved()
+    } catch (e) { toast.error('Erro ao salvar'); console.error(e) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <Dialog open={!!membership} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{nomeDe(student)}</DialogTitle>
+          <DialogDescription>{student?.email || 'Ficha do membro'}</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {/* Presença */}
+          <div className="rounded-lg bg-[#F7FAFC] px-3 py-3">
+            <p className="text-xs text-[#718096]">Presença</p>
+            <p className="mt-0.5 text-sm text-[#1A202C]">
+              Esteve em <b>{presencas}</b> de <b>{totalEncontros}</b> encontro(s) registrados.
+            </p>
+            {visita && (
+              <p className="mt-2 flex items-center gap-1.5 rounded-md bg-red-50 px-2 py-1.5 text-xs font-medium text-red-700">
+                <AlertCircle className="h-3.5 w-3.5" /> Faltou aos {faltas} últimos encontros. Vale uma visita ou uma ligação.
+              </p>
+            )}
+          </div>
+
+          {/* Contato */}
+          <div className="space-y-1.5">
+            <Label>Telefone / WhatsApp</Label>
+            {podeEditar ? (
+              <div className="flex gap-2">
+                <Input value={phone} onChange={(e) => setPhone(e.target.value)}
+                  placeholder="(11) 99999-9999" inputMode="tel" />
+                <Button variant="outline" size="sm" disabled={saving || phone === (membership.phone || '')}
+                  onClick={salvarTelefone}>
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar'}
+                </Button>
+              </div>
+            ) : (
+              <p className="text-sm text-[#4A5568]">{membership.phone || 'Não cadastrado'}</p>
+            )}
+            {wa ? (
+              <Button asChild className="mt-1 w-full gap-2 bg-[#25D366] text-white hover:bg-[#1EBE5D]">
+                <a href={wa} target="_blank" rel="noreferrer">
+                  <MessageCircle className="h-4 w-4" /> Chamar no WhatsApp
+                </a>
+              </Button>
+            ) : (
+              <p className="flex items-center gap-1 text-xs text-[#718096]">
+                <Phone className="h-3 w-3" /> Cadastre um telefone para liberar o WhatsApp.
+              </p>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Fechar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
