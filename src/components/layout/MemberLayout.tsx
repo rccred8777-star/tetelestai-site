@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import {
   LayoutDashboard, User, Users, BookOpen, Calendar, Bell,
   Heart, LogOut, Menu, X, ChevronLeft, ChevronRight,
-  PlayCircle, Shield, TrendingUp, Church, GraduationCap, Megaphone, Network, HandHeart
+  PlayCircle, Shield, TrendingUp, Church, GraduationCap, Megaphone, Network, HandHeart, BookMarked
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,7 @@ const memberNav = [
   { label: 'Cursos e Materiais', href: '/cursos', icon: GraduationCap },
   { label: 'Meus Eventos', href: '/meus-eventos', icon: Calendar },
   { label: 'Mural de Oracao', href: '/mural-oracao', icon: HandHeart },
+  { label: 'Memorizacao', href: '/memorizacao', icon: BookMarked },
   { label: 'Comunicados', href: '/comunicados', icon: Bell },
   { label: 'Minhas Doacoes', href: '/minhas-doacoes', icon: Heart },
 ]
@@ -37,6 +38,7 @@ const supervisorNav = [
 const adminNav = [
   { label: 'Painel Admin', href: '/admin', icon: Shield },
   { label: 'Gerenciar Celulas', href: '/admin/celulas', icon: Church },
+  { label: 'Gerenciar Versiculos', href: '/admin/versiculos', icon: BookMarked },
   { label: 'Gerenciar Cursos', href: '/admin/cursos', icon: GraduationCap },
   { label: 'Gerenciar Alunos', href: '/admin/alunos', icon: Users },
   { label: 'Gerenciar Comunicados', href: '/admin/comunicados', icon: Megaphone },
