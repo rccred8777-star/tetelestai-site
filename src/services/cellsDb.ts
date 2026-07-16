@@ -78,7 +78,18 @@ export interface Membership {
   userId: string
   status: MembershipStatus
   phone?: string        // telefone que o líder cadastra (para o WhatsApp)
+  birthday?: string     // aniversário 'YYYY-MM-DD' (usamos só dia/mês)
   createdAt?: unknown
+}
+
+/** Pedido de oração da célula. */
+export interface Prayer {
+  id: string
+  text: string
+  memberName?: string   // de quem é o pedido (opcional)
+  answered: boolean
+  createdAt?: unknown
+  answeredAt?: unknown
 }
 
 export interface Meeting {
@@ -252,6 +263,28 @@ export async function setMemberPhone(cellId: string, userId: string, phone: stri
   })
 }
 
+/** O líder cadastra/atualiza o aniversário do membro ('YYYY-MM-DD'). */
+export async function setMemberBirthday(cellId: string, userId: string, birthday: string): Promise<void> {
+  await updateDoc(doc(db, 'cellMemberships', membershipId(cellId, userId)), {
+    birthday: birthday || '',
+  })
+}
+
+/** Formata 'YYYY-MM-DD' como 'DD/MM' (ignora o ano). Vazio se inválido. */
+export function fmtAniversario(b?: string): string {
+  if (!b) return ''
+  const p = b.split('-')
+  if (p.length < 3) return ''
+  return `${p[2]}/${p[1]}`
+}
+
+/** O aniversário cai no mês informado (1-12)? Usado para "aniversariantes do mês". */
+export function aniversarioNoMes(b: string | undefined, mes1a12: number): boolean {
+  if (!b) return false
+  const p = b.split('-')
+  return p.length >= 2 && parseInt(p[1]) === mes1a12
+}
+
 /** Monta um link de WhatsApp a partir de um telefone brasileiro digitado livre. */
 export function waLink(phone?: string | null): string | null {
   if (!phone) return null
@@ -273,6 +306,35 @@ export async function listMyMemberships(userId: string): Promise<Membership[]> {
     query(collection(db, 'cellMemberships'), where('userId', '==', userId))
   )
   return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Membership, 'id'>) }))
+}
+
+// ---------------------------- Pedidos de oração -----------------------------
+
+export async function listPrayers(cellId: string): Promise<Prayer[]> {
+  const snap = await getDocs(
+    query(collection(db, 'cellGroups', cellId, 'prayers'), orderBy('createdAt', 'desc'))
+  )
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Prayer, 'id'>) }))
+}
+
+export async function addPrayer(cellId: string, text: string, memberName?: string): Promise<void> {
+  await addDoc(collection(db, 'cellGroups', cellId, 'prayers'), {
+    text: text.trim(),
+    memberName: memberName?.trim() || '',
+    answered: false,
+    createdAt: serverTimestamp(),
+  })
+}
+
+export async function setPrayerAnswered(cellId: string, id: string, answered: boolean): Promise<void> {
+  await updateDoc(doc(db, 'cellGroups', cellId, 'prayers', id), {
+    answered,
+    answeredAt: answered ? serverTimestamp() : null,
+  })
+}
+
+export async function deletePrayer(cellId: string, id: string): Promise<void> {
+  await deleteDoc(doc(db, 'cellGroups', cellId, 'prayers', id))
 }
 
 // ---------------------------- Encontros (relatório) -------------------------
