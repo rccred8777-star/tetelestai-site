@@ -233,6 +233,61 @@ export async function backfillCourseQuizzes(): Promise<{ courseId: string; updat
   return result
 }
 
+/**
+ * Preenche o conteúdo das aulas JÁ existentes a partir do material escrito no
+ * código (SEED_COURSES). Corrige cursos que foram criados antes do conteúdo
+ * ficar pronto (ex.: Fundamentos só com títulos).
+ *
+ * NÃO é destrutivo: só preenche campos que estão VAZIOS na aula do banco.
+ * Casa aula por ORDEM. Também completa a apostila (materials) do curso se vazia.
+ */
+export async function backfillCourseContent(): Promise<{ courseId: string; updated: number }[]> {
+  const isEmpty = (v: unknown) =>
+    v === undefined || v === null || v === '' ||
+    (Array.isArray(v) && v.length === 0)
+
+  const result: { courseId: string; updated: number }[] = []
+
+  for (const seed of SEED_COURSES) {
+    // completa a apostila do curso se estiver vazia
+    const courseSnap = await getDoc(doc(db, 'courses', seed.id))
+    if (courseSnap.exists()) {
+      const cur = courseSnap.data() as Course
+      if (isEmpty(cur.materials) && seed.materials && seed.materials.length) {
+        await updateDoc(doc(db, 'courses', seed.id), { materials: seed.materials, updatedAt: serverTimestamp() })
+      }
+    } else {
+      continue // curso ainda não existe: migração normal cuida disso
+    }
+
+    const lessons = await listLessons(seed.id)
+    let updated = 0
+    for (const l of lessons) {
+      const s = seed.lessons[(l.order || 1) - 1]
+      if (!s) continue
+      const patch: Partial<Lesson> = {}
+      const campos: (keyof Lesson)[] = [
+        'verse', 'verseText', 'videoUrl', 'content',
+        'discussionQuestions', 'practicalActivity', 'homework', 'memoryVerse',
+        'materials', 'quiz',
+      ]
+      for (const campo of campos) {
+        const atual = (l as Record<string, unknown>)[campo]
+        const semente = (s as Record<string, unknown>)[campo]
+        if (isEmpty(atual) && !isEmpty(semente)) {
+          ;(patch as Record<string, unknown>)[campo] = semente
+        }
+      }
+      if (Object.keys(patch).length) {
+        await updateLesson(seed.id, l.id, patch)
+        updated++
+      }
+    }
+    result.push({ courseId: seed.id, updated })
+  }
+  return result
+}
+
 export async function migrateSeedCourses(): Promise<MigrationReport> {
   const report: MigrationReport = { created: [], skipped: [], lessonsInserted: 0 }
 
